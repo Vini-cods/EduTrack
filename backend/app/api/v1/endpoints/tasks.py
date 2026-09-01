@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from uuid import UUID
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
@@ -12,7 +11,7 @@ router = APIRouter()
 
 @router.get("/subject/{subject_id}", response_model=List[TaskResponse])
 def read_tasks_by_subject(
-    subject_id: UUID,
+    subject_id: int,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -39,7 +38,7 @@ def create_task(
 
 @router.get("/{task_id}", response_model=TaskResponse)
 def read_task(
-    task_id: UUID,
+    task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -53,7 +52,7 @@ def read_task(
 
 @router.put("/{task_id}", response_model=TaskResponse)
 def update_task(
-    task_id: UUID,
+    task_id: int,
     task_in: TaskUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -68,7 +67,7 @@ def update_task(
 
 @router.patch("/{task_id}/status", response_model=TaskResponse)
 def update_task_status(
-    task_id: UUID,
+    task_id: int,
     status_in: TaskStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -83,7 +82,7 @@ def update_task_status(
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(
-    task_id: UUID,
+    task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

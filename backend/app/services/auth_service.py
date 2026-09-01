@@ -20,7 +20,7 @@ def create_user(db: Session, user_in: UserCreate) -> User:
     """Cria um novo usuário."""
     db_user = User(
         email=user_in.email,
-        full_name=user_in.full_name,
+        name=user_in.name,
         hashed_password=get_password_hash(user_in.password),
         is_active=user_in.is_active,
     )

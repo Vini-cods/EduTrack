@@ -18,6 +18,7 @@ class Subject(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
     professor: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workload_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)

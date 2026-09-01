@@ -1,6 +1,5 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
-from uuid import UUID
 from datetime import datetime
 
 class SubjectBase(BaseModel):
@@ -29,11 +28,11 @@ class SubjectResponse(SubjectBase):
     """
     Schema de resposta para Subject.
     """
-    id: UUID
-    user_id: UUID
+    id: int
+    user_id: int
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 class SubjectWithProgress(SubjectResponse):

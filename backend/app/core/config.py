@@ -16,7 +16,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
 
-    # Banco de dados - SQL Server
+    # Banco de dados
+    # DB_ENGINE = "sqlite" (padrão, zero configuração) ou "mssql" (SQL Server)
+    DB_ENGINE: str = "sqlite"
+    SQLITE_PATH: str = "edutrack.db"
+
+    # Configurações usadas apenas quando DB_ENGINE="mssql"
     DB_SERVER: str = "localhost\\SQLEXPRESS"
     DB_NAME: str = "EduTrackDB"
     DB_DRIVER: str = "ODBC Driver 18 for SQL Server"
@@ -28,18 +33,21 @@ class Settings(BaseSettings):
     ]
 
     @property
-    def DATABASE_URL(self) -> URL:
-        """Constrói a URL de conexão com o SQL Server usando Windows Authentication."""
-        return URL.create(
-            drivername="mssql+pyodbc",
-            host=self.DB_SERVER,
-            database=self.DB_NAME,
-            query={
-                "driver": self.DB_DRIVER,
-                "TrustServerCertificate": "yes",
-                "Trusted_Connection": "yes",
-            },
-        )
+    def DATABASE_URL(self) -> URL | str:
+        """Constrói a URL de conexão com o banco de dados configurado."""
+        if self.DB_ENGINE == "mssql":
+            return URL.create(
+                drivername="mssql+pyodbc",
+                host=self.DB_SERVER,
+                database=self.DB_NAME,
+                query={
+                    "driver": self.DB_DRIVER,
+                    "TrustServerCertificate": "yes",
+                    "Trusted_Connection": "yes",
+                },
+            )
+        # SQLite: arquivo local, não exige nenhuma instalação
+        return f"sqlite:///{self.SQLITE_PATH}"
 
     model_config = SettingsConfigDict(
         env_file=".env",

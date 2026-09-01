@@ -1,13 +1,12 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
-from uuid import UUID
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 class TaskStatus(str, Enum):
-    PENDING = "PENDING"
-    IN_PROGRESS = "IN_PROGRESS"
-    COMPLETED = "COMPLETED"
+    PENDENTE = "pendente"
+    EM_ANDAMENTO = "em_andamento"
+    CONCLUIDA = "concluida"
 
 class TaskBase(BaseModel):
     """
@@ -15,14 +14,14 @@ class TaskBase(BaseModel):
     """
     title: str
     description: Optional[str] = None
-    due_date: Optional[datetime] = None
-    status: TaskStatus = TaskStatus.PENDING
+    due_date: Optional[date] = None
+    status: TaskStatus = TaskStatus.PENDENTE
 
 class TaskCreate(TaskBase):
     """
     Schema para criação de Task.
     """
-    subject_id: UUID
+    subject_id: int
 
 class TaskUpdate(BaseModel):
     """
@@ -30,7 +29,7 @@ class TaskUpdate(BaseModel):
     """
     title: Optional[str] = None
     description: Optional[str] = None
-    due_date: Optional[datetime] = None
+    due_date: Optional[date] = None
     status: Optional[TaskStatus] = None
 
 class TaskStatusUpdate(BaseModel):
@@ -43,9 +42,9 @@ class TaskResponse(TaskBase):
     """
     Schema de resposta para Task.
     """
-    id: UUID
-    subject_id: UUID
+    id: int
+    subject_id: int
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)

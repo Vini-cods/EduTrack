@@ -1,12 +1,11 @@
 from pydantic import BaseModel
 from typing import List
-from uuid import UUID
 
 class SubjectProgress(BaseModel):
     """
     Schema representando o progresso de uma disciplina no dashboard.
     """
-    subject_id: UUID
+    subject_id: int
     subject_name: str
     total_tasks: int
     completed_tasks: int
