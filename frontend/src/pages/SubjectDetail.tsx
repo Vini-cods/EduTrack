@@ -31,7 +31,7 @@ export const SubjectDetail: React.FC = () => {
     try {
       const [subjRes, tasksRes] = await Promise.all([
         apiClient.get(`/subjects/${id}`),
-        apiClient.get(`/subjects/${id}/tasks`),
+        apiClient.get(`/tasks/subject/${id}`),
       ]);
       setSubject(subjRes.data);
       setTasks(tasksRes.data);
@@ -48,7 +48,7 @@ export const SubjectDetail: React.FC = () => {
 
   const onAddTask = async (data: any) => {
     try {
-      await apiClient.post(`/subjects/${id}/tasks`, data);
+      await apiClient.post('/tasks/', { ...data, subject_id: Number(id) });
       reset();
       setShowForm(false);
       fetchData();
@@ -59,7 +59,7 @@ export const SubjectDetail: React.FC = () => {
 
   const onChangeStatus = async (taskId: number, status: string) => {
     try {
-      await apiClient.patch(`/tasks/${taskId}`, { status });
+      await apiClient.patch(`/tasks/${taskId}/status`, { status });
       fetchData();
     } catch (e) {
       console.error(e);
@@ -96,9 +96,9 @@ export const SubjectDetail: React.FC = () => {
             <ClipboardList size={26} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-text">{subject.nome}</h1>
+            <h1 className="text-3xl font-bold text-text">{subject.name}</h1>
             <p className="text-text-secondary">
-              {subject.descricao || 'Sem descrição'}
+              {subject.description || 'Sem descrição'}
             </p>
           </div>
         </div>
@@ -128,7 +128,7 @@ export const SubjectDetail: React.FC = () => {
                   Título
                 </label>
                 <input
-                  {...register('titulo', { required: true })}
+                  {...register('title', { required: true })}
                   placeholder="Ex: Estudar capítulo 5"
                   className="w-full px-4 py-3 rounded-xl border-2 border-border bg-white text-text placeholder:text-gray-400 outline-none focus:border-primary-light focus:ring-4 focus:ring-primary-100 transition-all"
                 />
@@ -190,7 +190,7 @@ export const SubjectDetail: React.FC = () => {
                           : 'text-text'
                       }`}
                     >
-                      {task.titulo}
+                      {task.title}
                     </span>
                   </div>
                   <select

@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, LogIn, UserCircle } from 'lucide-react';
-import logo from '../assets/logo.jpg';
+import logo from '../assets/logo.png';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),

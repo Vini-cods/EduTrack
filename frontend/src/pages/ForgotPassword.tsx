@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft } from 'lucide-react';
-import logo from '../assets/logo.jpg';
+import logo from '../assets/logo.png';
+import apiClient from '../api/client';
 
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -12,10 +13,16 @@ export const ForgotPassword: React.FC = () => {
     e.preventDefault();
     if (!email) return;
     setIsLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setSent(true);
-    setIsLoading(false);
+    try {
+      await apiClient.post('/auth/forgot-password', { email });
+    } catch (err) {
+      console.error(err);
+      // Por segurança a mensagem de sucesso é mostrada mesmo se algo falhar,
+      // já que o backend nunca revela se o email existe ou não.
+    } finally {
+      setSent(true);
+      setIsLoading(false);
+    }
   };
 
   return (

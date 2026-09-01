@@ -9,7 +9,7 @@ import {
   LogOut,
   User,
 } from 'lucide-react';
-import logo from '../assets/logo.jpg';
+import logo from '../assets/logo.png';
 
 const navItems = [
   { to: '/dashboard', label: 'Página Inicial', icon: LayoutDashboard },
@@ -38,11 +38,11 @@ export const Sidebar: React.FC = () => {
       <div className="px-4 mb-6">
         <div className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-gray-50/50">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-light to-primary flex items-center justify-center text-white font-bold text-sm shrink-0">
-            {user?.nome ? user.nome.charAt(0).toUpperCase() : <User size={18} />}
+            {user?.name ? user.name.charAt(0).toUpperCase() : <User size={18} />}
           </div>
           <div className="min-w-0">
             <p className="text-text font-semibold text-sm truncate">
-              {user?.nome || 'Visitante'}
+              {user?.name || 'Visitante'}
             </p>
             <p className="text-text-secondary text-xs truncate">
               {user?.email || 'Modo convidado'}

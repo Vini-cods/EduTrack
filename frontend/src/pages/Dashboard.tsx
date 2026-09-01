@@ -25,7 +25,7 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     apiClient
-      .get('/dashboard')
+      .get('/dashboard/')
       .then((res) => setData(res.data))
       .catch(console.error);
   }, []);
@@ -39,7 +39,7 @@ export const Dashboard: React.FC = () => {
 
   const completionRate =
     data.total_tasks > 0
-      ? Math.round((data.completed_tasks / data.total_tasks) * 100)
+      ? Math.round((data.tasks_completed / data.total_tasks) * 100)
       : 0;
 
   const stats = [
@@ -61,7 +61,7 @@ export const Dashboard: React.FC = () => {
     },
     {
       label: 'Tarefas Concluídas',
-      value: data.completed_tasks,
+      value: data.tasks_completed,
       icon: CheckCircle2,
       color: 'from-green-500 to-green-700',
       bgLight: 'bg-green-50',
@@ -82,7 +82,7 @@ export const Dashboard: React.FC = () => {
       {/* Header */}
       <div className="mb-8 animate-fade-in">
         <h1 className="text-3xl font-bold text-text">
-          Olá, {user?.nome || 'Estudante'}! 👋
+          Olá, {user?.name || 'Estudante'}! 👋
         </h1>
         <p className="text-text-secondary mt-1">
           Aqui está o resumo do seu progresso acadêmico.
@@ -130,7 +130,7 @@ export const Dashboard: React.FC = () => {
             <BarChart data={data.subjects_progress} barSize={40}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0e6ff" />
               <XAxis
-                dataKey="name"
+                dataKey="subject_name"
                 tick={{ fill: '#64748b', fontSize: 12 }}
                 axisLine={{ stroke: '#e9d5ff' }}
               />

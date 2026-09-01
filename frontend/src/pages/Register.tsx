@@ -5,10 +5,10 @@ import * as z from 'zod';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
-import logo from '../assets/logo.jpg';
+import logo from '../assets/logo.png';
 
 const registerSchema = z.object({
-  nome: z.string().min(3, 'Nome muito curto'),
+  name: z.string().min(3, 'Nome muito curto'),
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres'),
 });
@@ -36,9 +36,9 @@ export const Register: React.FC = () => {
     try {
       await registerUser(data);
       navigate('/dashboard');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Erro ao registrar. Tente novamente.');
+      setError(err?.response?.data?.detail || 'Erro ao registrar. Tente novamente.');
     } finally {
       setIsLoading(false);
     }
@@ -96,19 +96,19 @@ export const Register: React.FC = () => {
                   size={18}
                 />
                 <input
-                  {...register('nome')}
+                  {...register('name')}
                   type="text"
                   placeholder="Seu nome completo"
                   className={`w-full pl-12 pr-4 py-3.5 rounded-xl border-2 bg-white text-text placeholder:text-gray-400 outline-none transition-all duration-200 ${
-                    errors.nome
+                    errors.name
                       ? 'border-red-400 focus:border-red-500'
                       : 'border-border focus:border-primary-light focus:ring-4 focus:ring-primary-100'
                   }`}
                 />
               </div>
-              {errors.nome && (
+              {errors.name && (
                 <span className="text-red-500 text-xs mt-1 block">
-                  {errors.nome.message}
+                  {errors.name.message}
                 </span>
               )}
             </div>

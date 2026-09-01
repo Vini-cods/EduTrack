@@ -31,8 +31,8 @@ export const Insights: React.FC = () => {
 
   useEffect(() => {
     Promise.all([
-      apiClient.get('/dashboard'),
-      apiClient.get('/subjects'),
+      apiClient.get('/dashboard/'),
+      apiClient.get('/subjects/'),
     ])
       .then(([dashRes, subjRes]) => {
         setData(dashRes.data);
@@ -58,19 +58,19 @@ export const Insights: React.FC = () => {
 
   const completionRate =
     data.total_tasks > 0
-      ? Math.round((data.completed_tasks / data.total_tasks) * 100)
+      ? Math.round((data.tasks_completed / data.total_tasks) * 100)
       : 0;
-  const pendingTasks = data.total_tasks - data.completed_tasks;
+  const pendingTasks = data.total_tasks - data.tasks_completed;
 
   const pieData = [
-    { name: 'Concluídas', value: data.completed_tasks },
-    { name: 'Em Andamento', value: Math.max(0, pendingTasks - Math.floor(pendingTasks / 2)) },
-    { name: 'Pendentes', value: Math.floor(pendingTasks / 2) },
+    { name: 'Concluídas', value: data.tasks_completed },
+    { name: 'Em Andamento', value: data.tasks_in_progress },
+    { name: 'Pendentes', value: data.tasks_pending },
   ].filter((d) => d.value > 0);
 
   // Best and worst performing subject
   const sortedSubjects = [...subjects].sort(
-    (a, b) => b.progresso - a.progresso
+    (a, b) => (b.progress ?? 0) - (a.progress ?? 0)
   );
   const bestSubject = sortedSubjects[0];
   const worstSubject = sortedSubjects[sortedSubjects.length - 1];
@@ -92,9 +92,9 @@ export const Insights: React.FC = () => {
       '🌟 Excelente progresso! Você está arrasando nos seus estudos!'
     );
   }
-  if (worstSubject && worstSubject.progresso < 30) {
+  if (worstSubject && (worstSubject.progress ?? 0) < 30) {
     tips.push(
-      `⚠️ A disciplina "${worstSubject.nome}" precisa de mais atenção. Dedique um tempo extra a ela.`
+      `⚠️ A disciplina "${worstSubject.name}" precisa de mais atenção. Dedique um tempo extra a ela.`
     );
   }
   if (data.total_tasks === 0) {
@@ -144,10 +144,10 @@ export const Insights: React.FC = () => {
               </span>
             </div>
             <p className="text-xl font-bold text-text truncate">
-              {bestSubject.nome}
+              {bestSubject.name}
             </p>
             <p className="text-sm text-primary-light font-semibold mt-1">
-              {bestSubject.progresso}% completo
+              {Math.round(bestSubject.progress ?? 0)}% completo
             </p>
           </div>
         )}
@@ -250,7 +250,7 @@ export const Insights: React.FC = () => {
                 <BarChart data={data.subjects_progress} barSize={32}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0e6ff" />
                   <XAxis
-                    dataKey="name"
+                    dataKey="subject_name"
                     tick={{ fill: '#64748b', fontSize: 11 }}
                     axisLine={{ stroke: '#e9d5ff' }}
                   />

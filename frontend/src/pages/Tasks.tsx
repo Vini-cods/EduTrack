@@ -27,17 +27,17 @@ export const Tasks: React.FC = () => {
   const fetchData = async () => {
     try {
       const [subjectsRes] = await Promise.all([
-        apiClient.get('/subjects'),
+        apiClient.get('/subjects/'),
       ]);
       const subjectsList: Subject[] = subjectsRes.data;
 
       const allTasks: TaskWithSubject[] = [];
       for (const subject of subjectsList) {
         try {
-          const tasksRes = await apiClient.get(`/subjects/${subject.id}/tasks`);
+          const tasksRes = await apiClient.get(`/tasks/subject/${subject.id}`);
           const tasksWithName = tasksRes.data.map((t: Task) => ({
             ...t,
-            subject_name: subject.nome,
+            subject_name: subject.name,
           }));
           allTasks.push(...tasksWithName);
         } catch {
@@ -58,7 +58,7 @@ export const Tasks: React.FC = () => {
 
   const onChangeStatus = async (taskId: number, status: string) => {
     try {
-      await apiClient.patch(`/tasks/${taskId}`, { status });
+      await apiClient.patch(`/tasks/${taskId}/status`, { status });
       fetchData();
     } catch (e) {
       console.error(e);
@@ -149,7 +149,7 @@ export const Tasks: React.FC = () => {
                             : 'text-text'
                         }`}
                       >
-                        {task.titulo}
+                        {task.title}
                       </span>
                       {task.subject_name && (
                         <span className="text-xs text-primary-light font-medium">

@@ -21,7 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (token) {
-      apiClient.get('/users/me')
+      apiClient.get('/auth/me')
         .then(res => setUser(res.data))
         .catch(() => {
           setToken(null);
@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     formData.append('username', data.email);
     formData.append('password', data.password);
     
-    const res = await apiClient.post('/auth/token', formData);
+    const res = await apiClient.post('/auth/login', formData);
     setToken(res.data.access_token);
     localStorage.setItem('token', res.data.access_token);
   };
@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const randomId = Math.random().toString(36).substring(2, 10);
     const fakeEmail = `visitante_${randomId}@edutrack.com`;
     const fakePass = `senha_${randomId}`;
-    await register({ nome: 'Visitante', email: fakeEmail, password: fakePass });
+    await register({ name: 'Visitante', email: fakeEmail, password: fakePass });
   };
 
   const logout = () => {

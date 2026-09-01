@@ -19,7 +19,7 @@ export const Subjects: React.FC = () => {
   const fetchSubjects = () => {
     setLoading(true);
     apiClient
-      .get('/subjects')
+      .get('/subjects/')
       .then((res) => setSubjects(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -31,7 +31,7 @@ export const Subjects: React.FC = () => {
 
   const onSubmit = async (data: any) => {
     try {
-      await apiClient.post('/subjects', data);
+      await apiClient.post('/subjects/', data);
       reset();
       setShowForm(false);
       fetchSubjects();
@@ -74,7 +74,7 @@ export const Subjects: React.FC = () => {
                 Nome
               </label>
               <input
-                {...register('nome', { required: true })}
+                {...register('name', { required: true })}
                 placeholder="Ex: Matemática"
                 className="w-full px-4 py-3 rounded-xl border-2 border-border bg-white text-text placeholder:text-gray-400 outline-none focus:border-primary-light focus:ring-4 focus:ring-primary-100 transition-all"
               />
@@ -84,7 +84,7 @@ export const Subjects: React.FC = () => {
                 Descrição
               </label>
               <input
-                {...register('descricao')}
+                {...register('description')}
                 placeholder="Breve descrição da disciplina"
                 className="w-full px-4 py-3 rounded-xl border-2 border-border bg-white text-text placeholder:text-gray-400 outline-none focus:border-primary-light focus:ring-4 focus:ring-primary-100 transition-all"
               />
@@ -145,22 +145,22 @@ export const Subjects: React.FC = () => {
                 />
               </div>
               <h3 className="text-lg font-bold text-text mb-1">
-                {subject.nome}
+                {subject.name}
               </h3>
               <p className="text-sm text-text-secondary mb-4 line-clamp-2">
-                {subject.descricao || 'Sem descrição'}
+                {subject.description || 'Sem descrição'}
               </p>
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-text-secondary">Progresso</span>
                   <span className="font-semibold text-primary">
-                    {subject.progresso}%
+                    {Math.round(subject.progress ?? 0)}%
                   </span>
                 </div>
                 <div className="w-full bg-primary-100 rounded-full h-2.5">
                   <div
                     className="bg-gradient-to-r from-primary-light to-primary h-2.5 rounded-full transition-all duration-500"
-                    style={{ width: `${subject.progresso}%` }}
+                    style={{ width: `${subject.progress ?? 0}%` }}
                   />
                 </div>
               </div>
