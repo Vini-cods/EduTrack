@@ -11,7 +11,7 @@ from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.base import Base  # noqa: E402
-from app.models import User, Subject, Task  # noqa: E402, F401
+from app.models import User, Subject, Task, CalendarEvent, StudySession, Material  # noqa: E402, F401
 
 config = context.config
 

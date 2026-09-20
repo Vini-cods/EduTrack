@@ -1,74 +1,161 @@
 @import "tailwindcss";
 
+/*
+  =========================================================================
+  EduTrack — Design Tokens
+  =========================================================================
+  Identidade acadêmica/editorial: off-white quente, tinta grafite, azul-marinho
+  estrutural e crimson como accent (não como cor de interface inteira).
+  Tokens em `--color-*` e `--font-*` são captados automaticamente pelo
+  Tailwind v4 e viram utilitários (ex.: --color-crimson -> bg-crimson,
+  text-crimson, border-crimson).
+*/
 @theme {
-  --color-primary: #7c3aed;
-  --color-primary-light: #8b5cf6;
-  --color-primary-dark: #6d28d9;
-  --color-primary-50: #f5f3ff;
-  --color-primary-100: #ede9fe;
-  --color-primary-200: #ddd6fe;
-  --color-primary-300: #c4b5fd;
-  --color-primary-400: #a78bfa;
-  --color-sidebar: #ffffff;
-  --color-sidebar-hover: #f3f4f6;
-  --color-sidebar-active: #f5f3ff;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-bg: #fafafa;
+  /* Superfícies */
+  --color-paper: #f7f5f1;
   --color-surface: #ffffff;
-  --color-text: #111827;
-  --color-text-secondary: #6b7280;
-  --color-border: #e5e7eb;
+  --color-surface-muted: #f1efe8;
+
+  /* Texto */
+  --color-ink: #1c1b19;
+  --color-graphite: #4b4a47;
+  --color-muted: #85817a;
+
+  /* Bordas */
+  --color-border: #e4e1d8;
+  --color-border-strong: #cfcbbf;
+
+  /* Azul-marinho — cor estrutural (navegação ativa, cabeçalhos, dados) */
+  --color-navy: #1c2b4a;
+  --color-navy-light: #2f4370;
+  --color-navy-dark: #121d33;
+  --color-navy-soft: #e8ecf3;
+
+  /* Crimson — accent (CTAs, destaques, urgência). Usar com moderação. */
+  --color-crimson: #9a2b2f;
+  --color-crimson-light: #b8474b;
+  --color-crimson-dark: #741f22;
+  --color-crimson-soft: #f7e9e8;
+
+  /* Vinho — accent secundário, muito discreto */
+  --color-wine: #5c2a3a;
+
+  /* Estados */
+  --color-success: #2f6b4f;
+  --color-success-soft: #e6f2ec;
+  --color-warning: #a8721f;
+  --color-warning-soft: #faf0dd;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbeae8;
+
+  /* Tipografia */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: 'Source Serif 4', ui-serif, Georgia, 'Times New Roman', serif;
+
+  /* Sombra única e discreta — reservada a elementos "flutuantes" (menus,
+     modais, command palette). Cards usam borda, não sombra. */
+  --shadow-soft: 0 1px 2px rgba(28, 27, 25, 0.06), 0 4px 16px -4px rgba(28, 27, 25, 0.10);
+  --shadow-float: 0 12px 32px -8px rgba(28, 27, 25, 0.22), 0 4px 12px -4px rgba(28, 27, 25, 0.12);
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--color-bg);
-  color: var(--color-text);
+  font-family: var(--font-sans);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* Scrollbar discreto, tons neutros */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-primary-300);
-  border-radius: 3px;
+  background: var(--color-border-strong);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary-400);
+  background: var(--color-muted);
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+/* Seleção de texto com o accent da marca */
+::selection {
+  background-color: var(--color-crimson-soft);
+  color: var(--color-crimson-dark);
+}
+
+/* =========================================================================
+   Motion — utilitários de entrada/transição
+   Movimento com função: comunicar hierarquia e mudança de estado, nunca
+   decoração pura. Ver também o media query prefers-reduced-motion abaixo.
+   ========================================================================= */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-20px); }
+  from { opacity: 0; transform: translateX(-12px); }
   to { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(147, 51, 234, 0.15); }
-  50% { box-shadow: 0 0 40px rgba(147, 51, 234, 0.3); }
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.5s ease-out forwards;
+  animation: fadeIn 0.4s ease-out both;
 }
 
 .animate-slide-in {
-  animation: slideInLeft 0.3s ease-out forwards;
+  animation: slideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
+.animate-scale-in {
+  animation: scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--color-surface-muted) 25%, #e8e5db 37%, var(--color-surface-muted) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Easing "spring-like" reutilizável para microinterações (hover, press,
+   expand/collapse) sem precisar de uma lib de física de animação. */
+.ease-spring {
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Respeita a preferência do usuário por menos movimento. Este seletor
+   universal só neutraliza timing de animação/transição — nunca layout
+   (margin/padding/display) — por isso é seguro mesmo fora de uma @layer. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

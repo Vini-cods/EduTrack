@@ -39,3 +39,12 @@ class Subject(Base):
     # Relacionamentos
     user = relationship("User", back_populates="subjects")
     tasks = relationship("Task", back_populates="subject", cascade="all, delete-orphan")
+    # Sem cascade de delete aqui: se a disciplina for removida, o evento deve
+    # continuar existindo (só perde o vínculo), coerente com o ondelete="SET NULL"
+    # da FK em CalendarEvent.subject_id.
+    calendar_events = relationship("CalendarEvent", back_populates="subject")
+    study_sessions = relationship("StudySession", back_populates="subject")
+    # Cascade aqui (diferente de calendar_events/study_sessions): subject_id
+    # é obrigatório em Material, então excluir a disciplina deve excluir
+    # seus materiais também, coerente com o ondelete="CASCADE" da FK.
+    materials = relationship("Material", back_populates="subject", cascade="all, delete-orphan")

@@ -4,10 +4,21 @@ from typing import List
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskResponse
+from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskResponse, TaskWithSubject
 from app.services import task_service
 
 router = APIRouter()
+
+@router.get("/", response_model=List[TaskWithSubject])
+def read_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retorna todas as tarefas do usuário atual, de todas as disciplinas,
+    já com o nome/cor da disciplina anexados e ordenadas por prazo.
+    """
+    return task_service.get_tasks_for_user(db=db, user_id=current_user.id)
 
 @router.get("/subject/{subject_id}", response_model=List[TaskResponse])
 def read_tasks_by_subject(
