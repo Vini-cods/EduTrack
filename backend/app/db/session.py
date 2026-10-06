@@ -1,9 +1,7 @@
 """Configuração da sessão do banco de dados."""
 
-from collections.abc import Generator
-
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
@@ -27,11 +25,7 @@ else:
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-
-def get_db() -> Generator[Session, None, None]:
-    """Dependency que fornece uma sessão do banco de dados."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# A dependency `get_db` usada pelas rotas mora em app.api.deps (não aqui) —
+# era duplicada nos dois arquivos; removida daqui para ter uma única fonte
+# de verdade. `SessionLocal`/`engine` continuam aqui porque deps.py e o
+# Alembic (via app.db.base/session) dependem deles.

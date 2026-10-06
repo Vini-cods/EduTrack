@@ -3,22 +3,65 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard,
-  BookOpen,
+  Calendar,
   ClipboardList,
+  Timer,
+  BookOpen,
+  FileText,
+  StickyNote,
   Lightbulb,
+  Settings,
   LogOut,
   User,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
-import logo from '../assets/logo.png';
+import { Logo } from './Logo';
+import { Tooltip } from './ui/Tooltip';
 
-const navItems = [
-  { to: '/dashboard', label: 'Página Inicial', icon: LayoutDashboard },
-  { to: '/subjects', label: 'Disciplinas', icon: BookOpen },
-  { to: '/tasks', label: 'Tarefas', icon: ClipboardList },
-  { to: '/insights', label: 'Insights', icon: Lightbulb },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: React.ElementType;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const groups: NavGroup[] = [
+  {
+    label: 'Visão geral',
+    items: [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/calendar', label: 'Calendário', icon: Calendar },
+      { to: '/tasks', label: 'Tarefas', icon: ClipboardList },
+      { to: '/study', label: 'Estudo', icon: Timer },
+    ],
+  },
+  {
+    label: 'Acadêmico',
+    items: [
+      { to: '/subjects', label: 'Disciplinas', icon: BookOpen },
+      { to: '/materials', label: 'Materiais', icon: FileText },
+      { to: '/notes', label: 'Notas', icon: StickyNote },
+    ],
+  },
+  {
+    label: 'Análise',
+    items: [{ to: '/insights', label: 'Insights', icon: Lightbulb }],
+  },
 ];
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  /** Chamado ao clicar em um link — usado para fechar o drawer no mobile. */
+  onNavigate?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggleCollapse, onNavigate }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -27,66 +70,111 @@ export const Sidebar: React.FC = () => {
     navigate('/login');
   };
 
+  // Collapsed usa preenchimento sólido no botão inteiro para marcar o item
+  // ativo (não a borda esquerda do modo expandido, que fica torta quando o
+  // conteúdo está centralizado em vez de alinhado à esquerda).
+  const linkClasses = (isActive: boolean) =>
+    collapsed
+      ? `flex items-center justify-center rounded-lg py-2.5 transition-colors duration-150 ${
+          isActive ? 'bg-crimson-soft' : 'hover:bg-surface-muted'
+        }`
+      : `group flex items-center gap-3 rounded-lg text-sm font-medium px-3 py-2.5 transition-colors duration-150 border-l-2 ${
+          isActive
+            ? 'bg-crimson-soft text-crimson-dark border-crimson -ml-0.5 pl-[10px]'
+            : 'text-graphite hover:bg-surface-muted border-transparent'
+        }`;
+
+  const renderLink = (item: NavItem) => {
+    const link = (
+      <NavLink key={item.to} to={item.to} onClick={onNavigate} className={({ isActive }) => linkClasses(isActive)}>
+        {({ isActive }) => (
+          <>
+            <item.icon size={18} className={isActive ? 'text-crimson shrink-0' : 'text-muted shrink-0'} />
+            {!collapsed && <span className="truncate">{item.label}</span>}
+          </>
+        )}
+      </NavLink>
+    );
+    return collapsed ? (
+      <Tooltip key={item.to} label={item.label} side="right">
+        {link}
+      </Tooltip>
+    ) : (
+      link
+    );
+  };
+
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-border flex flex-col z-50">
-      {/* Logo */}
-      <div className="flex items-center justify-center py-6 px-4">
-        <img src={logo} alt="EduTrack" className="h-10 object-contain" />
+    <aside className="h-full bg-surface border-r border-border flex flex-col">
+      {/* Logo + toggle — empilhados verticalmente quando collapsed, para não
+          ficarem espremidos lado a lado numa rail estreita. */}
+      <div className={`flex ${collapsed ? 'flex-col items-center gap-2.5 py-5' : 'flex-row items-center justify-between px-5 py-5'}`}>
+        <Logo size="sm" withWordmark={!collapsed} />
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className="hidden lg:flex items-center justify-center w-7 h-7 rounded-md text-muted hover:bg-surface-muted hover:text-ink transition-colors cursor-pointer"
+            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+          </button>
+        )}
       </div>
 
-      {/* User Info */}
-      <div className="px-4 mb-6">
-        <div className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-gray-50/50">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-light to-primary flex items-center justify-center text-white font-bold text-sm shrink-0">
-            {user?.name ? user.name.charAt(0).toUpperCase() : <User size={18} />}
+      {/* User info */}
+      <div className={`mb-5 ${collapsed ? 'px-2' : 'px-4'}`}>
+        {collapsed ? (
+          <Tooltip label={user?.name || 'Usuário'} side="right">
+            <div className="w-9 h-9 mx-auto rounded-full bg-navy flex items-center justify-center text-white font-serif font-semibold text-sm shrink-0">
+              {user?.name ? user.name.charAt(0).toUpperCase() : <User size={16} />}
+            </div>
+          </Tooltip>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-paper/60 p-3">
+            <div className="w-9 h-9 rounded-full bg-navy flex items-center justify-center text-white font-serif font-semibold text-sm shrink-0">
+              {user?.name ? user.name.charAt(0).toUpperCase() : <User size={16} />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-ink font-semibold text-sm truncate">{user?.name || 'Usuário'}</p>
+              <p className="text-muted text-xs truncate">{user?.email || ''}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-text font-semibold text-sm truncate">
-              {user?.name || 'Visitante'}
-            </p>
-            <p className="text-text-secondary text-xs truncate">
-              {user?.email || 'Modo convidado'}
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-        <p className="px-4 text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 mt-2">
-          Menu Principal
-        </p>
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? 'bg-primary-50 text-primary'
-                  : 'text-text-secondary hover:bg-gray-50 hover:text-text'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <item.icon size={18} className={isActive ? 'text-primary' : 'text-gray-400'} />
-                <span>{item.label}</span>
-              </>
-            )}
-          </NavLink>
+      <nav className={`flex-1 overflow-y-auto ${collapsed ? 'px-2 space-y-2.5' : 'px-3 space-y-5'}`}>
+        {groups.map((group, i) => (
+          <div key={group.label}>
+            {collapsed && i > 0 && <div className="border-t border-border mb-2.5" />}
+            {!collapsed && <p className="px-3 text-xs text-muted mb-1.5">{group.label}</p>}
+            <div className="space-y-1">{group.items.map(renderLink)}</div>
+          </div>
         ))}
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-border">
-        <button
-          onClick={handleLogout}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900 border border-gray-200 transition-all duration-200 w-full cursor-pointer"
-        >
-          <LogOut size={16} />
-          <span>Sair da conta</span>
-        </button>
+      {/* Settings + Logout */}
+      <div className={`border-t border-border pt-3 pb-4 space-y-1 ${collapsed ? 'px-2' : 'px-3'}`}>
+        {renderLink({ to: '/settings', label: 'Configurações', icon: Settings })}
+        {collapsed ? (
+          <Tooltip label="Sair da conta" side="right">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center py-2.5 rounded-lg text-muted hover:bg-surface-muted hover:text-ink transition-colors cursor-pointer"
+              aria-label="Sair da conta"
+            >
+              <LogOut size={18} />
+            </button>
+          </Tooltip>
+        ) : (
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-graphite hover:bg-surface-muted hover:text-ink transition-colors cursor-pointer"
+          >
+            <LogOut size={18} className="text-muted shrink-0" />
+            Sair da conta
+          </button>
+        )}
       </div>
     </aside>
   );

@@ -33,3 +33,6 @@ class User(Base):
     # Relacionamentos
     subjects = relationship("Subject", back_populates="user", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
+    calendar_events = relationship("CalendarEvent", back_populates="user", cascade="all, delete-orphan")
+    study_sessions = relationship("StudySession", back_populates="user", cascade="all, delete-orphan")
+    materials = relationship("Material", back_populates="user", cascade="all, delete-orphan")

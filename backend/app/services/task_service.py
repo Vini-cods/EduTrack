@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import case
 from app.models.task import Task
 from app.models.subject import Subject
-from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate
+from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskWithSubject
 from typing import List, Optional
 
 def get_tasks_by_subject(db: Session, subject_id: int, user_id: int, skip: int = 0, limit: int = 100) -> List[Task]:
@@ -12,6 +13,48 @@ def get_tasks_by_subject(db: Session, subject_id: int, user_id: int, skip: int =
         Task.subject_id == subject_id,
         Subject.user_id == user_id
     ).offset(skip).limit(limit).all()
+
+def get_tasks_for_user(db: Session, user_id: int) -> List[TaskWithSubject]:
+    """
+    Retorna TODAS as tarefas do usuário (de todas as disciplinas), já com o
+    nome e a cor da disciplina anexados.
+
+    Existe para servir telas que precisam da visão completa (página de Tarefas,
+    Dashboard) sem que o frontend precise fazer uma chamada por disciplina.
+    Ordena por data de entrega (tarefas sem prazo vão para o final) e, dentro
+    do mesmo prazo, pelas mais recentes primeiro.
+    """
+    rows = (
+        db.query(Task, Subject.name, Subject.color)
+        .join(Subject, Task.subject_id == Subject.id)
+        .filter(Subject.user_id == user_id)
+        .order_by(
+            case((Task.due_date.is_(None), 1), else_=0),
+            Task.due_date.asc(),
+            Task.created_at.desc(),
+        )
+        .all()
+    )
+
+    result: List[TaskWithSubject] = []
+    for task, subject_name, subject_color in rows:
+        result.append(
+            TaskWithSubject(
+                id=task.id,
+                title=task.title,
+                description=task.description,
+                due_date=task.due_date,
+                status=task.status,
+                priority=task.priority,
+                estimated_hours=task.estimated_hours,
+                subject_id=task.subject_id,
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+                subject_name=subject_name,
+                subject_color=subject_color,
+            )
+        )
+    return result
 
 def get_task_by_id(db: Session, task_id: int, user_id: int) -> Optional[Task]:
     """
@@ -35,6 +78,8 @@ def create_task(db: Session, task: TaskCreate, user_id: int) -> Optional[Task]:
         description=task.description,
         due_date=task.due_date,
         status=task.status,
+        priority=task.priority,
+        estimated_hours=task.estimated_hours,
         subject_id=task.subject_id,
         user_id=user_id
     )

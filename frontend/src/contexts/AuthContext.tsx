@@ -2,13 +2,23 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import type { User } from '../types';
 
+interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+interface RegisterData {
+  name: string;
+  email: string;
+  password: string;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (data: any) => Promise<void>;
-  register: (data: any) => Promise<void>;
-  loginAsGuest: () => Promise<void>;
+  login: (data: LoginCredentials) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
   logout: () => void;
 }
 
@@ -33,26 +43,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token]);
 
-  const login = async (data: any) => {
+  const login = async (data: LoginCredentials) => {
     const formData = new URLSearchParams();
     formData.append('username', data.email);
     formData.append('password', data.password);
-    
+
     const res = await apiClient.post('/auth/login', formData);
     setToken(res.data.access_token);
     localStorage.setItem('token', res.data.access_token);
   };
 
-  const register = async (data: any) => {
+  const register = async (data: RegisterData) => {
     await apiClient.post('/auth/register', data);
     await login({ email: data.email, password: data.password });
-  };
-
-  const loginAsGuest = async () => {
-    const randomId = Math.random().toString(36).substring(2, 10);
-    const fakeEmail = `visitante_${randomId}@edutrack.com`;
-    const fakePass = `senha_${randomId}`;
-    await register({ name: 'Visitante', email: fakeEmail, password: fakePass });
   };
 
   const logout = () => {
@@ -62,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, loginAsGuest, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

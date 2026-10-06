@@ -13,16 +13,22 @@ import {
   YAxis,
   CartesianGrid,
 } from 'recharts';
-import {
-  Lightbulb,
-  TrendingUp,
-  Target,
-  Award,
-  Loader2,
-  Flame,
-} from 'lucide-react';
+import { Lightbulb, TrendingUp, Award, ClipboardList } from 'lucide-react';
+import { SectionHeader } from '../components/ui/SectionHeader';
+import { Card } from '../components/ui/Card';
+import { Skeleton } from '../components/ui/Skeleton';
+import { EmptyState } from '../components/ui/EmptyState';
 
-const PIE_COLORS = ['#22c55e', '#3b82f6', '#f59e0b'];
+// Cores semânticas alinhadas ao resto do produto: sucesso/navy/alerta em vez
+// das cores genéricas do Recharts.
+const PIE_COLORS = ['#2f6b4f', '#1c2b4a', '#a8721f']; // concluídas / em andamento / pendentes
+const tooltipStyle = {
+  backgroundColor: '#ffffff',
+  border: '1px solid #e4e1d8',
+  borderRadius: '8px',
+  color: '#1c1b19',
+  fontSize: '13px',
+};
 
 export const Insights: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -30,10 +36,7 @@ export const Insights: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      apiClient.get('/dashboard/'),
-      apiClient.get('/subjects/'),
-    ])
+    Promise.all([apiClient.get('/dashboard/'), apiClient.get('/subjects/')])
       .then(([dashRes, subjRes]) => {
         setData(dashRes.data);
         setSubjects(subjRes.data);
@@ -42,284 +45,168 @@ export const Insights: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin text-primary" size={40} />
+      <div className="p-6 lg:p-8 max-w-6xl mx-auto">
+        <Skeleton className="h-9 w-48 mb-2" />
+        <Skeleton className="h-4 w-72 mb-8" />
+        <div className="grid grid-cols-3 gap-6 py-6 border-y border-border">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-9 w-20" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
       </div>
     );
+  }
 
-  if (!data)
+  if (!data) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-text-secondary">
-        Erro ao carregar dados.
+      <div className="p-6 lg:p-8 max-w-6xl mx-auto">
+        <Card padding="lg">
+          <EmptyState icon={ClipboardList} title="Erro ao carregar dados" description="Tente novamente em instantes." />
+        </Card>
       </div>
     );
+  }
 
-  const completionRate =
-    data.total_tasks > 0
-      ? Math.round((data.tasks_completed / data.total_tasks) * 100)
-      : 0;
+  const completionRate = data.total_tasks > 0 ? Math.round((data.tasks_completed / data.total_tasks) * 100) : 0;
   const pendingTasks = data.total_tasks - data.tasks_completed;
 
   const pieData = [
     { name: 'Concluídas', value: data.tasks_completed },
-    { name: 'Em Andamento', value: data.tasks_in_progress },
+    { name: 'Em andamento', value: data.tasks_in_progress },
     { name: 'Pendentes', value: data.tasks_pending },
   ].filter((d) => d.value > 0);
 
-  // Best and worst performing subject
-  const sortedSubjects = [...subjects].sort(
-    (a, b) => (b.progress ?? 0) - (a.progress ?? 0)
-  );
+  const sortedSubjects = [...subjects].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0));
   const bestSubject = sortedSubjects[0];
   const worstSubject = sortedSubjects[sortedSubjects.length - 1];
 
-  // Tips based on data
+  // Dicas determinísticas baseadas nos dados atuais (sem IA) — mesma regra de
+  // negócio de antes, só a apresentação visual muda nesta migração.
   const tips: string[] = [];
   if (completionRate < 30) {
-    tips.push(
-      '📚 Tente definir metas diárias menores para aumentar sua taxa de conclusão.'
-    );
+    tips.push('📚 Tente definir metas diárias menores para aumentar sua taxa de conclusão.');
   }
   if (completionRate >= 30 && completionRate < 70) {
-    tips.push(
-      '💪 Você está no caminho certo! Continue mantendo a consistência nos estudos.'
-    );
+    tips.push('💪 Você está no caminho certo! Continue mantendo a consistência nos estudos.');
   }
   if (completionRate >= 70) {
-    tips.push(
-      '🌟 Excelente progresso! Você está arrasando nos seus estudos!'
-    );
+    tips.push('🌟 Excelente progresso! Você está arrasando nos seus estudos!');
   }
   if (worstSubject && (worstSubject.progress ?? 0) < 30) {
-    tips.push(
-      `⚠️ A disciplina "${worstSubject.name}" precisa de mais atenção. Dedique um tempo extra a ela.`
-    );
+    tips.push(`⚠️ A disciplina "${worstSubject.name}" precisa de mais atenção. Dedique um tempo extra a ela.`);
   }
   if (data.total_tasks === 0) {
-    tips.push(
-      '📝 Comece criando tarefas nas suas disciplinas para acompanhar seu progresso!'
-    );
+    tips.push('📝 Comece criando tarefas nas suas disciplinas para acompanhar seu progresso!');
   }
 
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="mb-8 animate-fade-in">
-        <h1 className="text-3xl font-bold text-text">Insights</h1>
-        <p className="text-text-secondary mt-1">
-          Análise detalhada do seu desempenho acadêmico
-        </p>
-      </div>
+    <div className="p-6 lg:p-8 max-w-6xl mx-auto">
+      <SectionHeader title="Insights" description="Análise detalhada do seu desempenho acadêmico." />
 
-      {/* Top Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/50 animate-fade-in">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
-              <Target className="text-green-600" size={20} />
-            </div>
-            <span className="text-sm font-semibold text-text-secondary">
-              Taxa de Conclusão
-            </span>
-          </div>
-          <p className="text-4xl font-bold text-text">{completionRate}%</p>
-          <div className="w-full bg-green-100 rounded-full h-2 mt-3">
-            <div
-              className="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all duration-700"
-              style={{ width: `${completionRate}%` }}
-            />
-          </div>
+      {/* Métricas — mesma linguagem editorial do Dashboard, sem repetir cards de ícone */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5 py-6 mt-6 border-y border-border">
+        <div>
+          <p className="font-serif text-4xl font-semibold text-ink tabular-nums">{completionRate}%</p>
+          <p className="text-sm text-graphite mt-1">Taxa de conclusão</p>
         </div>
-
-        {bestSubject && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/50 animate-fade-in" style={{ animationDelay: '100ms' }}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-                <Award className="text-amber-600" size={20} />
-              </div>
-              <span className="text-sm font-semibold text-text-secondary">
-                Melhor Disciplina
-              </span>
-            </div>
-            <p className="text-xl font-bold text-text truncate">
-              {bestSubject.name}
-            </p>
-            <p className="text-sm text-primary-light font-semibold mt-1">
-              {Math.round(bestSubject.progress ?? 0)}% completo
-            </p>
-          </div>
-        )}
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/50 animate-fade-in" style={{ animationDelay: '200ms' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
-              <Flame className="text-purple-600" size={20} />
-            </div>
-            <span className="text-sm font-semibold text-text-secondary">
-              Tarefas Restantes
-            </span>
-          </div>
-          <p className="text-4xl font-bold text-text">{pendingTasks}</p>
-          <p className="text-sm text-text-secondary mt-1">
-            de {data.total_tasks} no total
+        <div className="sm:border-l sm:border-border sm:pl-6">
+          <p className="font-serif text-2xl font-semibold text-ink truncate">{bestSubject ? bestSubject.name : '—'}</p>
+          <p className="text-sm text-graphite mt-1">
+            {bestSubject ? `Melhor disciplina · ${Math.round(bestSubject.progress ?? 0)}%` : 'Melhor disciplina'}
           </p>
         </div>
+        <div className="sm:border-l sm:border-border sm:pl-6">
+          <p className="font-serif text-4xl font-semibold text-ink tabular-nums">{pendingTasks}</p>
+          <p className="text-sm text-graphite mt-1">Tarefas restantes de {data.total_tasks}</p>
+        </div>
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Pie Chart */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/50 animate-fade-in" style={{ animationDelay: '300ms' }}>
+      {/* Gráficos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <Card>
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
-              <Lightbulb className="text-primary" size={20} />
-            </div>
-            <h3 className="text-lg font-bold text-text">
-              Distribuição de Tarefas
-            </h3>
+            <Lightbulb className="text-navy" size={20} />
+            <h3 className="font-serif text-lg font-semibold text-ink">Distribuição de tarefas</h3>
           </div>
           {pieData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={5}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={4} dataKey="value" strokeWidth={0}>
                     {pieData.map((_entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={PIE_COLORS[index % PIE_COLORS.length]}
-                      />
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      color: '#111827',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    }}
-                  />
+                  <Tooltip contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-text-secondary">
-              Sem dados para exibir
-            </div>
+            <div className="h-64 flex items-center justify-center text-muted text-sm">Sem dados para exibir</div>
           )}
-          {/* Legend */}
           <div className="flex justify-center gap-6 mt-4">
             {pieData.map((entry, index) => (
               <div key={entry.name} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
-                />
-                <span className="text-xs text-text-secondary">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
+                <span className="text-xs text-graphite">
                   {entry.name} ({entry.value})
                 </span>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
 
-        {/* Bar Chart */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/50 animate-fade-in" style={{ animationDelay: '400ms' }}>
+        <Card>
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
-              <TrendingUp className="text-primary" size={20} />
-            </div>
-            <h3 className="text-lg font-bold text-text">
-              Progresso por Disciplina
-            </h3>
+            <TrendingUp className="text-navy" size={20} />
+            <h3 className="font-serif text-lg font-semibold text-ink">Progresso por disciplina</h3>
           </div>
           {data.subjects_progress.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.subjects_progress} barSize={32}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0e6ff" />
-                  <XAxis
-                    dataKey="subject_name"
-                    tick={{ fill: '#64748b', fontSize: 11 }}
-                    axisLine={{ stroke: '#e9d5ff' }}
-                  />
-                  <YAxis
-                    tick={{ fill: '#64748b', fontSize: 11 }}
-                    axisLine={{ stroke: '#e9d5ff' }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      color: '#111827',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    }}
-                    labelStyle={{ color: '#6b7280', fontWeight: 600, marginBottom: '4px' }}
-                  />
-                  <Bar
-                    dataKey="progress"
-                    fill="url(#insightGradient)"
-                    radius={[6, 6, 0, 0]}
-                  />
-                  <defs>
-                    <linearGradient
-                      id="insightGradient"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="0%" stopColor="#a855f7" />
-                      <stop offset="100%" stopColor="#7e22ce" />
-                    </linearGradient>
-                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e1d8" vertical={false} />
+                  <XAxis dataKey="subject_name" tick={{ fill: '#85817a', fontSize: 11 }} axisLine={{ stroke: '#e4e1d8' }} tickLine={false} />
+                  <YAxis tick={{ fill: '#85817a', fontSize: 11 }} axisLine={{ stroke: '#e4e1d8' }} tickLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f1efe8' }} />
+                  <Bar dataKey="progress" radius={[4, 4, 0, 0]}>
+                    {data.subjects_progress.map((entry, index) => (
+                      <Cell key={`bar-${index}`} fill={entry.progress < 40 ? '#9a2b2f' : '#1c2b4a'} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-text-secondary">
-              Sem dados para exibir
-            </div>
+            <div className="h-64 flex items-center justify-center text-muted text-sm">Sem dados para exibir</div>
           )}
-        </div>
+        </Card>
       </div>
 
-      {/* Tips */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-border/50 animate-fade-in" style={{ animationDelay: '500ms' }}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
-            <Lightbulb className="text-primary" size={20} />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-text">Dicas e Sugestões</h3>
-            <p className="text-sm text-text-secondary">
-              Baseadas no seu desempenho atual
-            </p>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {tips.map((tip, index) => (
-            <div
-              key={index}
-              className="p-4 rounded-xl bg-primary-50/50 border border-primary-100 text-text text-sm"
-            >
-              {tip}
+      {/* Dicas */}
+      {tips.length > 0 && (
+        <Card className="mt-6">
+          <div className="flex items-center gap-3 mb-5">
+            <Award className="text-crimson" size={20} />
+            <div>
+              <h3 className="font-serif text-lg font-semibold text-ink">Dicas e sugestões</h3>
+              <p className="text-sm text-muted">Baseadas no seu desempenho atual</p>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+          <div className="space-y-2.5">
+            {tips.map((tip, index) => (
+              <div key={index} className="p-3.5 rounded-lg bg-surface-muted text-ink text-sm">
+                {tip}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 };

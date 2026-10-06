@@ -4,8 +4,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, LogIn, UserCircle } from 'lucide-react';
-import logo from '../assets/logo.png';
+import { Eye, EyeOff, Mail, Lock, LogIn, AlertCircle, CalendarDays, Timer } from 'lucide-react';
+import { Logo } from '../components/Logo';
+import { TextField } from '../components/ui/TextField';
+import { Button } from '../components/ui/Button';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -14,12 +16,21 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
+const WEEK_PREVIEW = [
+  { label: 'S', day: 14 },
+  { label: 'T', day: 15 },
+  { label: 'Q', day: 16, tone: 'crimson' as const },
+  { label: 'Q', day: 17 },
+  { label: 'S', day: 18, tone: 'navy' as const },
+  { label: 'S', day: 19 },
+  { label: 'D', day: 20 },
+];
+
 export const Login: React.FC = () => {
-  const { login, loginAsGuest } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [error, setError] = useState('');
 
   const {
@@ -44,194 +55,167 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleGuestLogin = async () => {
-    setIsGuestLoading(true);
-    setError('');
-    try {
-      await loginAsGuest();
-      navigate('/dashboard');
-    } catch (err) {
-      console.error(err);
-      setError('Erro ao entrar como visitante.');
-    } finally {
-      setIsGuestLoading(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen flex bg-gray-50/50">
-      {/* Left Side - Brand / Info (Hidden on Mobile) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-white flex-col justify-between p-12 border-r border-gray-100 relative overflow-hidden">
-        {/* Subtle background pattern */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23000000\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }} />
-        
-        <div className="relative z-10">
-          <img src={logo} alt="EduTrack Logo" className="h-10 mb-16" />
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight leading-tight mb-6">
-            O seu painel <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-light">
-              definitivo de estudos
-            </span>
+    <div className="min-h-screen flex bg-paper">
+      {/* Lado esquerdo — identidade + prévia do produto (oculto no mobile) */}
+      <div className="hidden lg:flex lg:w-1/2 bg-surface flex-col justify-between p-12 border-r border-border relative overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23000000\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+          }}
+        />
+
+        <div className="relative z-10 animate-fade-in-up">
+          <Logo size="lg" className="mb-14" />
+          <h1 className="font-serif text-4xl font-semibold text-ink tracking-tight leading-tight mb-6">
+            O seu painel definitivo de estudos
           </h1>
-          <p className="text-lg text-gray-500 max-w-md leading-relaxed">
+          <p className="text-lg text-graphite max-w-md leading-relaxed">
             Acompanhe suas tarefas, avalie seu progresso e conquiste suas metas acadêmicas de forma inteligente.
           </p>
         </div>
 
-        {/* Floating cards decorative */}
-        <div className="relative z-10 hidden xl:block mb-8">
-          <div className="bg-white p-5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 max-w-xs transform -rotate-2">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                <div className="w-3 h-3 bg-green-500 rounded-full" />
-              </div>
-              <div className="text-sm font-semibold text-gray-800">Tarefa Concluída</div>
+        {/* Prévia ilustrativa do produto — calendário, progresso e próxima entrega */}
+        <div className="relative z-10 hidden xl:block mb-4">
+          <div
+            className="bg-surface p-5 rounded-xl shadow-soft border border-border w-[300px] animate-fade-in-up"
+            style={{ animationDelay: '120ms' }}
+          >
+            <div className="flex items-center gap-2 mb-3.5">
+              <CalendarDays size={14} className="text-muted" />
+              <span className="text-xs font-medium text-graphite">Esta semana</span>
             </div>
-            <div className="h-2 bg-gray-100 rounded-full w-3/4 mb-2" />
-            <div className="h-2 bg-gray-100 rounded-full w-1/2" />
+            <div className="grid grid-cols-7 gap-1.5 mb-4">
+              {WEEK_PREVIEW.map((d, i) => (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <span className="text-[9px] text-muted">{d.label}</span>
+                  <div
+                    className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-medium ${
+                      d.tone === 'crimson'
+                        ? 'bg-crimson text-white'
+                        : d.tone === 'navy'
+                        ? 'bg-navy-soft text-navy'
+                        : 'text-graphite'
+                    }`}
+                  >
+                    {d.day}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2.5 pt-3.5 border-t border-border">
+              {[
+                { name: 'Estruturas de Dados', pct: 72 },
+                { name: 'Cálculo II', pct: 45 },
+              ].map((s) => (
+                <div key={s.name}>
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-ink font-medium truncate">{s.name}</span>
+                    <span className="text-muted shrink-0 ml-2">{s.pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${s.pct < 50 ? 'bg-crimson' : 'bg-navy'}`}
+                      style={{ width: `${s.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 mt-4 pt-3.5 border-t border-border">
+              <span className="w-1.5 h-1.5 rounded-full bg-crimson shrink-0" />
+              <span className="text-[11px] text-graphite">
+                <span className="text-ink font-medium">Trabalho de BD</span> vence em 3 dias
+              </span>
+            </div>
           </div>
-          
-          <div className="bg-white p-5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-100 max-w-xs transform translate-x-12 -translate-y-4 rotate-3">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center">
-                <div className="w-3 h-3 bg-primary rounded-full" />
+
+          <div
+            className="bg-surface px-4 py-3 rounded-xl shadow-soft border border-border w-fit transform translate-x-10 -translate-y-3 rotate-2 animate-fade-in-up"
+            style={{ animationDelay: '220ms' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-success-soft flex items-center justify-center shrink-0">
+                <Timer size={13} className="text-success" />
               </div>
-              <div className="text-sm font-semibold text-gray-800">Física Quant.</div>
-            </div>
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div className="bg-primary h-2 rounded-full" style={{ width: '75%' }} />
+              <div>
+                <p className="text-[11px] font-semibold text-ink leading-tight">32 min de foco</p>
+                <p className="text-[10px] text-muted leading-tight">Estruturas de Dados</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Right Side - Form */}
+      {/* Lado direito — formulário */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 relative">
         <div className="w-full max-w-md">
-          {/* Mobile Logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <img src={logo} alt="EduTrack" className="h-10" />
+            <Logo size="md" />
           </div>
 
           <div className="mb-10 text-center lg:text-left">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Bem-vindo de volta</h2>
-            <p className="text-gray-500">Insira suas credenciais para acessar sua conta</p>
+            <h2 className="font-serif text-2xl font-semibold text-ink mb-2">Bem-vindo de volta</h2>
+            <p className="text-graphite">Insira suas credenciais para acessar sua conta</p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm animate-fade-in flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            <div className="mb-6 p-4 rounded-xl bg-danger-soft border border-danger/20 text-danger text-sm animate-fade-in flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  {...register('email')}
-                  type="email"
-                  placeholder="seu@email.com"
-                  className={`w-full pl-10 pr-4 py-2.5 rounded-lg border bg-white text-gray-900 placeholder:text-gray-400 outline-none transition-all duration-200 ${
-                    errors.email
-                      ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
-                      : 'border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/10'
-                  }`}
-                />
-              </div>
-              {errors.email && (
-                <span className="text-red-500 text-xs mt-1.5 block">
-                  {errors.email.message}
-                </span>
-              )}
+              <label className="block text-sm font-medium text-graphite mb-1.5">Email</label>
+              <TextField
+                icon={Mail}
+                type="email"
+                placeholder="seu@email.com"
+                error={errors.email?.message}
+                {...register('email')}
+              />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-medium text-gray-700">
-                  Senha
-                </label>
-                <Link
-                  to="/forgot-password"
-                  className="text-sm text-primary hover:text-primary-dark font-medium transition-colors"
-                >
+                <label className="block text-sm font-medium text-graphite">Senha</label>
+                <Link to="/forgot-password" className="text-sm text-crimson hover:text-crimson-dark font-medium transition-colors">
                   Esqueci a senha
                 </Link>
               </div>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  {...register('password')}
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  className={`w-full pl-10 pr-10 py-2.5 rounded-lg border bg-white text-gray-900 placeholder:text-gray-400 outline-none transition-all duration-200 ${
-                    errors.password
-                      ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
-                      : 'border-gray-200 focus:border-primary focus:ring-4 focus:ring-primary/10'
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              {errors.password && (
-                <span className="text-red-500 text-xs mt-1.5 block">
-                  {errors.password.message}
-                </span>
-              )}
+              <TextField
+                icon={Lock}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                error={errors.password?.message}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-muted hover:text-graphite transition-colors cursor-pointer"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                }
+                {...register('password')}
+              />
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading || isGuestLoading}
-              className="w-full flex justify-center items-center gap-2 py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-all duration-200 shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <LoaderIcon />
-              ) : (
-                <>
-                  <LogIn size={18} />
-                  Entrar
-                </>
-              )}
-            </button>
+            <Button type="submit" variant="primary" size="lg" className="w-full" loading={isLoading} icon={<LogIn size={18} />}>
+              Entrar
+            </Button>
           </form>
 
-          <div className="my-6 flex items-center text-gray-300">
-            <div className="flex-1 border-t border-gray-200"></div>
-            <span className="px-4 text-sm text-gray-500 font-medium">ou</span>
-            <div className="flex-1 border-t border-gray-200"></div>
-          </div>
-
-          <button
-            onClick={handleGuestLogin}
-            disabled={isLoading || isGuestLoading}
-            className="w-full flex justify-center items-center gap-2 py-2.5 rounded-lg bg-white border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {isGuestLoading ? (
-              <LoaderIcon className="text-gray-500" />
-            ) : (
-              <>
-                <UserCircle size={20} className="text-gray-500" />
-                Entrar como Visitante
-              </>
-            )}
-          </button>
-
-          <p className="mt-8 text-center text-sm text-gray-500">
+          <p className="mt-8 text-center text-sm text-graphite">
             Ainda não possui conta?{' '}
-            <Link
-              to="/register"
-              className="text-primary hover:text-primary-dark font-medium transition-colors"
-            >
+            <Link to="/register" className="text-crimson hover:text-crimson-dark font-medium transition-colors">
               Criar uma conta
             </Link>
           </p>
@@ -240,10 +224,3 @@ export const Login: React.FC = () => {
     </div>
   );
 };
-
-const LoaderIcon = ({ className = "text-white" }: { className?: string }) => (
-  <svg className={`animate-spin h-5 w-5 ${className}`} viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-  </svg>
-);
