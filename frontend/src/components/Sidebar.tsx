@@ -70,14 +70,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggleCol
     navigate('/login');
   };
 
+  // Collapsed usa preenchimento sólido no botão inteiro para marcar o item
+  // ativo (não a borda esquerda do modo expandido, que fica torta quando o
+  // conteúdo está centralizado em vez de alinhado à esquerda).
   const linkClasses = (isActive: boolean) =>
-    `group flex items-center gap-3 rounded-lg text-sm font-medium transition-colors duration-150 ${
-      collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
-    } ${
-      isActive
-        ? 'bg-crimson-soft text-crimson-dark border-l-2 border-crimson -ml-0.5 pl-[10px]'
-        : 'text-graphite hover:bg-surface-muted border-l-2 border-transparent'
-    }`;
+    collapsed
+      ? `flex items-center justify-center rounded-lg py-2.5 transition-colors duration-150 ${
+          isActive ? 'bg-crimson-soft' : 'hover:bg-surface-muted'
+        }`
+      : `group flex items-center gap-3 rounded-lg text-sm font-medium px-3 py-2.5 transition-colors duration-150 border-l-2 ${
+          isActive
+            ? 'bg-crimson-soft text-crimson-dark border-crimson -ml-0.5 pl-[10px]'
+            : 'text-graphite hover:bg-surface-muted border-transparent'
+        }`;
 
   const renderLink = (item: NavItem) => {
     const link = (
@@ -101,15 +106,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggleCol
 
   return (
     <aside className="h-full bg-surface border-r border-border flex flex-col">
-      {/* Logo + toggle */}
-      <div className={`flex items-center py-5 ${collapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
+      {/* Logo + toggle — empilhados verticalmente quando collapsed, para não
+          ficarem espremidos lado a lado numa rail estreita. */}
+      <div className={`flex ${collapsed ? 'flex-col items-center gap-2.5 py-5' : 'flex-row items-center justify-between px-5 py-5'}`}>
         <Logo size="sm" withWordmark={!collapsed} />
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
-            className={`hidden lg:flex items-center justify-center w-7 h-7 rounded-md text-muted hover:bg-surface-muted hover:text-ink transition-colors cursor-pointer ${
-              collapsed ? 'mt-2' : ''
-            }`}
+            className="hidden lg:flex items-center justify-center w-7 h-7 rounded-md text-muted hover:bg-surface-muted hover:text-ink transition-colors cursor-pointer"
             aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
@@ -118,38 +122,39 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggleCol
       </div>
 
       {/* User info */}
-      <div className={`mb-4 ${collapsed ? 'px-2' : 'px-4'}`}>
-        <div
-          className={`flex items-center gap-3 rounded-xl border border-border bg-paper/60 ${
-            collapsed ? 'justify-center p-2' : 'p-3'
-          }`}
-        >
-          <div className="w-9 h-9 rounded-full bg-navy flex items-center justify-center text-white font-serif font-semibold text-sm shrink-0">
-            {user?.name ? user.name.charAt(0).toUpperCase() : <User size={16} />}
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="text-ink font-semibold text-sm truncate">{user?.name || 'Visitante'}</p>
-              <p className="text-muted text-xs truncate">{user?.email || 'Modo convidado'}</p>
+      <div className={`mb-5 ${collapsed ? 'px-2' : 'px-4'}`}>
+        {collapsed ? (
+          <Tooltip label={user?.name || 'Usuário'} side="right">
+            <div className="w-9 h-9 mx-auto rounded-full bg-navy flex items-center justify-center text-white font-serif font-semibold text-sm shrink-0">
+              {user?.name ? user.name.charAt(0).toUpperCase() : <User size={16} />}
             </div>
-          )}
-        </div>
+          </Tooltip>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-paper/60 p-3">
+            <div className="w-9 h-9 rounded-full bg-navy flex items-center justify-center text-white font-serif font-semibold text-sm shrink-0">
+              {user?.name ? user.name.charAt(0).toUpperCase() : <User size={16} />}
+            </div>
+            <div className="min-w-0">
+              <p className="text-ink font-semibold text-sm truncate">{user?.name || 'Usuário'}</p>
+              <p className="text-muted text-xs truncate">{user?.email || ''}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className={`flex-1 overflow-y-auto space-y-5 ${collapsed ? 'px-2' : 'px-3'}`}>
-        {groups.map((group) => (
+      <nav className={`flex-1 overflow-y-auto ${collapsed ? 'px-2 space-y-2.5' : 'px-3 space-y-5'}`}>
+        {groups.map((group, i) => (
           <div key={group.label}>
-            {!collapsed && (
-              <p className="px-3 text-xs text-muted mb-1.5">{group.label}</p>
-            )}
-            <div className="space-y-0.5">{group.items.map(renderLink)}</div>
+            {collapsed && i > 0 && <div className="border-t border-border mb-2.5" />}
+            {!collapsed && <p className="px-3 text-xs text-muted mb-1.5">{group.label}</p>}
+            <div className="space-y-1">{group.items.map(renderLink)}</div>
           </div>
         ))}
       </nav>
 
       {/* Settings + Logout */}
-      <div className={`border-t border-border pt-3 pb-4 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
+      <div className={`border-t border-border pt-3 pb-4 space-y-1 ${collapsed ? 'px-2' : 'px-3'}`}>
         {renderLink({ to: '/settings', label: 'Configurações', icon: Settings })}
         {collapsed ? (
           <Tooltip label="Sair da conta" side="right">

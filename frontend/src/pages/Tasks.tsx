@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import apiClient from '../api/client';
-import type { TaskWithSubject, Subject } from '../types';
+import type { TaskWithSubject, Subject, TaskPriority } from '../types';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -11,10 +11,10 @@ import { Button } from '../components/ui/Button';
 import { Tabs } from '../components/ui/Tabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { RowSkeleton } from '../components/ui/Skeleton';
-import { isDueToday, isPastDue, isThisWeek, formatShortDate } from '../lib/date';
+import { isDueToday, isPastDue, isThisWeek, formatShortDate, getDueDateStatus, DUE_DATE_TEXT_CLASS } from '../lib/date';
 import { PRIORITY_META, PRIORITY_ORDER } from '../lib/tasks';
-import { ClipboardList, Plus, Trash2, Circle, CheckCircle2 } from 'lucide-react';
-import type { TaskPriority } from '../types';
+import { TaskEditModal } from '../components/tasks/TaskEditModal';
+import { ClipboardList, Plus, Trash2, Pencil, Circle, CheckCircle2 } from 'lucide-react';
 
 type TabKey = 'todas' | 'hoje' | 'semana' | 'atrasadas' | 'concluida';
 
@@ -33,6 +33,7 @@ export const Tasks: React.FC = () => {
   const [subjectFilter, setSubjectFilter] = useState('todas');
   const [sortBy, setSortBy] = useState<'due_date' | 'created_at' | 'priority'>('due_date');
   const [showForm, setShowForm] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithSubject | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const highlightId = searchParams.get('highlight');
 
@@ -305,7 +306,7 @@ export const Tasks: React.FC = () => {
         <Card padding="none">
           <div className="divide-y divide-border">
             {filtered.map((task) => {
-              const overdue = task.status !== 'concluida' && isPastDue(task.due_date);
+              const dueDateStatus = task.status === 'concluida' ? null : getDueDateStatus(task.due_date);
               return (
                 <div
                   key={task.id}
@@ -334,10 +335,18 @@ export const Tasks: React.FC = () => {
                     >
                       {task.title}
                     </p>
-                    <p className="text-xs text-muted truncate">
-                      {task.subject_name}
-                      {task.due_date ? ` · ${formatShortDate(task.due_date)}` : ' · sem prazo'}
-                      {task.estimated_hours ? ` · ${task.estimated_hours}h` : ''}
+                    <p className="text-xs truncate">
+                      <span className="text-muted">{task.subject_name}</span>
+                      {task.status !== 'concluida' && (
+                        <span className={DUE_DATE_TEXT_CLASS[dueDateStatus!]}>
+                          {' · '}
+                          {dueDateStatus === 'sem_prazo' ? 'Sem prazo' : formatShortDate(task.due_date!)}
+                        </span>
+                      )}
+                      {task.status === 'concluida' && task.due_date && (
+                        <span className="text-muted"> · {formatShortDate(task.due_date)}</span>
+                      )}
+                      {task.estimated_hours && <span className="text-muted"> · {task.estimated_hours}h</span>}
                     </p>
                   </div>
 
@@ -347,9 +356,14 @@ export const Tasks: React.FC = () => {
                     </Badge>
                   )}
 
-                  {overdue && (
+                  {dueDateStatus === 'atrasada' && (
                     <Badge tone="danger" size="sm">
                       Atrasada
+                    </Badge>
+                  )}
+                  {dueDateStatus === 'hoje' && (
+                    <Badge tone="warning" size="sm">
+                      Hoje
                     </Badge>
                   )}
 
@@ -364,6 +378,14 @@ export const Tasks: React.FC = () => {
                   </select>
 
                   <button
+                    onClick={() => setEditingTask(task)}
+                    className="text-muted hover:text-ink transition-colors cursor-pointer shrink-0"
+                    aria-label="Editar tarefa"
+                  >
+                    <Pencil size={15} />
+                  </button>
+
+                  <button
                     onClick={() => onDelete(task.id)}
                     className="text-muted hover:text-danger transition-colors cursor-pointer shrink-0"
                     aria-label="Excluir tarefa"
@@ -376,6 +398,16 @@ export const Tasks: React.FC = () => {
           </div>
         </Card>
       )}
+
+      <TaskEditModal
+        task={editingTask}
+        subjects={subjects}
+        onClose={() => setEditingTask(null)}
+        onSaved={() => {
+          setEditingTask(null);
+          loadTasks();
+        }}
+      />
     </div>
   );
 };

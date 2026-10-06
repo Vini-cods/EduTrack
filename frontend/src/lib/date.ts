@@ -43,6 +43,28 @@ export function startOfWeek(date: Date = new Date()): Date {
   return d;
 }
 
+export type DueDateStatus = 'atrasada' | 'hoje' | 'proximo' | 'sem_prazo';
+
+/**
+ * Estado do prazo de uma tarefa NÃO concluída (conclusão é um estado à
+ * parte, tratado separadamente pelo strikethrough/ícone de check — não
+ * duplicado aqui).
+ */
+export function getDueDateStatus(dueDate: string | null | undefined): DueDateStatus {
+  if (!dueDate) return 'sem_prazo';
+  if (isPastDue(dueDate)) return 'atrasada';
+  if (isDueToday(dueDate)) return 'hoje';
+  return 'proximo';
+}
+
+/** Cor do texto do prazo por estado — visual sutil para todos os 5 estados, sem badge em toda tarefa. */
+export const DUE_DATE_TEXT_CLASS: Record<DueDateStatus, string> = {
+  atrasada: 'text-danger font-medium',
+  hoje: 'text-warning font-medium',
+  proximo: 'text-graphite',
+  sem_prazo: 'text-muted italic',
+};
+
 export function isThisWeek(dueDate: string | null | undefined): boolean {
   if (!dueDate) return false;
   const start = startOfWeek();

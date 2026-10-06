@@ -54,10 +54,4 @@ def test_protected_route_rejects_invalid_token(client):
     assert resp.status_code == 401
 
 
-def test_guest_flow_register_then_login_works(client):
-    """O 'login como visitante' do frontend é só register + login com credenciais geradas — confirma que o par continua funcionando."""
-    email = "visitante-teste@example.com"
-    r1 = client.post("/api/v1/auth/register", json={"name": "Visitante", "email": email, "password": "senhaTemp123"})
-    assert r1.status_code in (200, 201)
-    r2 = client.post("/api/v1/auth/login", data={"username": email, "password": "senhaTemp123"})
-    assert r2.status_code == 200
+

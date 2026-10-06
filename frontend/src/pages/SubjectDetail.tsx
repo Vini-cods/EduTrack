@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import apiClient from '../api/client';
-import type { Subject, Task, TaskStatus, Material } from '../types';
+import type { Subject, Task, TaskStatus, TaskPriority, Material } from '../types';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, Plus, CheckCircle2, Clock, AlertCircle, ClipboardList, BookOpen, ExternalLink, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, CheckCircle2, Clock, AlertCircle, ClipboardList, BookOpen, ExternalLink, FolderOpen } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -12,6 +12,9 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Skeleton, RowSkeleton } from '../components/ui/Skeleton';
 import { useSetBreadcrumb } from '../contexts/BreadcrumbContext';
 import { CATEGORY_META, STATUS_META } from '../lib/materials';
+import { PRIORITY_META, PRIORITY_ORDER } from '../lib/tasks';
+import { getDueDateStatus, DUE_DATE_TEXT_CLASS, formatShortDate } from '../lib/date';
+import { TaskEditModal } from '../components/tasks/TaskEditModal';
 
 const statusConfig: Record<string, { label: string; tone: 'warning' | 'navy' | 'success'; icon: React.ElementType }> = {
   pendente: { label: 'Pendente', tone: 'warning', icon: AlertCircle },
@@ -21,6 +24,8 @@ const statusConfig: Record<string, { label: string; tone: 'warning' | 'navy' | '
 
 interface TaskFormValues {
   title: string;
+  due_date: string;
+  priority: TaskPriority;
 }
 
 export const SubjectDetail: React.FC = () => {
@@ -28,22 +33,26 @@ export const SubjectDetail: React.FC = () => {
   const [subject, setSubject] = useState<Subject | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const { register, handleSubmit, reset } = useForm<TaskFormValues>();
 
   useSetBreadcrumb(subject?.name ?? null);
 
   const fetchData = async () => {
     try {
-      const [subjRes, tasksRes, materialsRes] = await Promise.all([
+      const [subjRes, tasksRes, materialsRes, allSubjectsRes] = await Promise.all([
         apiClient.get(`/subjects/${id}`),
         apiClient.get(`/tasks/subject/${id}`),
         apiClient.get(`/materials/subject/${id}`),
+        apiClient.get('/subjects/'),
       ]);
       setSubject(subjRes.data);
       setTasks(tasksRes.data);
       setMaterials(materialsRes.data);
+      setAllSubjects(allSubjectsRes.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -58,7 +67,12 @@ export const SubjectDetail: React.FC = () => {
 
   const onAddTask = handleSubmit(async (data) => {
     try {
-      await apiClient.post('/tasks/', { ...data, subject_id: Number(id) });
+      await apiClient.post('/tasks/', {
+        title: data.title,
+        subject_id: Number(id),
+        due_date: data.due_date || null,
+        priority: data.priority || 'media',
+      });
       reset();
       setShowForm(false);
       fetchData();
@@ -140,13 +154,37 @@ export const SubjectDetail: React.FC = () => {
           <Card padding="md">
             <h3 className="font-serif text-lg font-semibold text-ink mb-4">Adicionar tarefa</h3>
             <form onSubmit={onAddTask} className="flex flex-col md:flex-row gap-4 items-end">
-              <div className="flex-1 w-full">
+              <div className="flex-[2] w-full">
                 <label className="block text-sm font-medium text-graphite mb-1.5">Título</label>
                 <input
                   {...register('title', { required: true })}
                   placeholder="Ex: Estudar capítulo 5"
                   className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
                 />
+              </div>
+              <div className="w-full md:w-auto md:min-w-[160px]">
+                <label className="block text-sm font-medium text-graphite mb-1.5">Prazo (opcional)</label>
+                <input
+                  type="date"
+                  {...register('due_date')}
+                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
+                />
+              </div>
+              <div className="w-full md:w-auto md:min-w-[130px]">
+                <label className="block text-sm font-medium text-graphite mb-1.5">Prioridade</label>
+                <select
+                  {...register('priority')}
+                  defaultValue="media"
+                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
+                >
+                  {PRIORITY_ORDER.slice()
+                    .reverse()
+                    .map((p) => (
+                      <option key={p} value={p}>
+                        {PRIORITY_META[p].label}
+                      </option>
+                    ))}
+                </select>
               </div>
               <div className="flex gap-3 shrink-0">
                 <Button
@@ -176,16 +214,30 @@ export const SubjectDetail: React.FC = () => {
           <div className="divide-y divide-border">
             {tasks.map((task) => {
               const config = statusConfig[task.status] || statusConfig.pendente;
+              const dueDateStatus = task.status === 'concluida' ? null : getDueDateStatus(task.due_date);
               return (
                 <div key={task.id} className="flex items-center justify-between gap-3 p-4">
-                  <span
-                    className={`text-sm font-medium truncate ${
-                      task.status === 'concluida' ? 'line-through text-muted' : 'text-ink'
-                    }`}
-                  >
-                    {task.title}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`text-sm font-medium truncate ${
+                        task.status === 'concluida' ? 'line-through text-muted' : 'text-ink'
+                      }`}
+                    >
+                      {task.title}
+                    </p>
+                    {task.status !== 'concluida' && (
+                      <p className={`text-xs ${DUE_DATE_TEXT_CLASS[dueDateStatus!]}`}>
+                        {dueDateStatus === 'sem_prazo' ? 'Sem prazo' : formatShortDate(task.due_date!)}
+                        {task.estimated_hours ? ` · ${task.estimated_hours}h` : ''}
+                      </p>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {(task.priority === 'urgente' || task.priority === 'alta') && (
+                      <Badge tone={PRIORITY_META[task.priority].tone} size="sm">
+                        {PRIORITY_META[task.priority].label}
+                      </Badge>
+                    )}
                     <Badge tone={config.tone} icon={<config.icon size={12} />}>
                       {config.label}
                     </Badge>
@@ -198,6 +250,13 @@ export const SubjectDetail: React.FC = () => {
                       <option value="em_andamento">Em andamento</option>
                       <option value="concluida">Concluída</option>
                     </select>
+                    <button
+                      onClick={() => setEditingTask(task)}
+                      className="text-muted hover:text-ink transition-colors cursor-pointer"
+                      aria-label="Editar tarefa"
+                    >
+                      <Pencil size={15} />
+                    </button>
                   </div>
                 </div>
               );
@@ -261,6 +320,16 @@ export const SubjectDetail: React.FC = () => {
           </div>
         )}
       </Card>
+
+      <TaskEditModal
+        task={editingTask}
+        subjects={allSubjects}
+        onClose={() => setEditingTask(null)}
+        onSaved={() => {
+          setEditingTask(null);
+          fetchData();
+        }}
+      />
     </div>
   );
 };

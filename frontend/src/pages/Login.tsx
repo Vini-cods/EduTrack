@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, LogIn, UserCircle, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, LogIn, AlertCircle, CalendarDays, Timer } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { TextField } from '../components/ui/TextField';
 import { Button } from '../components/ui/Button';
@@ -16,12 +16,21 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
+const WEEK_PREVIEW = [
+  { label: 'S', day: 14 },
+  { label: 'T', day: 15 },
+  { label: 'Q', day: 16, tone: 'crimson' as const },
+  { label: 'Q', day: 17 },
+  { label: 'S', day: 18, tone: 'navy' as const },
+  { label: 'S', day: 19 },
+  { label: 'D', day: 20 },
+];
+
 export const Login: React.FC = () => {
-  const { login, loginAsGuest } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [error, setError] = useState('');
 
   const {
@@ -46,23 +55,9 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleGuestLogin = async () => {
-    setIsGuestLoading(true);
-    setError('');
-    try {
-      await loginAsGuest();
-      navigate('/dashboard');
-    } catch (err) {
-      console.error(err);
-      setError('Erro ao entrar como visitante.');
-    } finally {
-      setIsGuestLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex bg-paper">
-      {/* Lado esquerdo — identidade / decorativo (oculto no mobile) */}
+      {/* Lado esquerdo — identidade + prévia do produto (oculto no mobile) */}
       <div className="hidden lg:flex lg:w-1/2 bg-surface flex-col justify-between p-12 border-r border-border relative overflow-hidden">
         <div
           className="absolute inset-0 opacity-[0.03]"
@@ -72,8 +67,8 @@ export const Login: React.FC = () => {
           }}
         />
 
-        <div className="relative z-10">
-          <Logo size="lg" className="mb-16" />
+        <div className="relative z-10 animate-fade-in-up">
+          <Logo size="lg" className="mb-14" />
           <h1 className="font-serif text-4xl font-semibold text-ink tracking-tight leading-tight mb-6">
             O seu painel definitivo de estudos
           </h1>
@@ -82,28 +77,75 @@ export const Login: React.FC = () => {
           </p>
         </div>
 
-        {/* Cards decorativos */}
-        <div className="relative z-10 hidden xl:block mb-8">
-          <div className="bg-surface p-5 rounded-xl shadow-soft border border-border max-w-xs transform -rotate-2">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-success-soft flex items-center justify-center">
-                <div className="w-3 h-3 bg-success rounded-full" />
-              </div>
-              <div className="text-sm font-semibold text-ink">Tarefa Concluída</div>
+        {/* Prévia ilustrativa do produto — calendário, progresso e próxima entrega */}
+        <div className="relative z-10 hidden xl:block mb-4">
+          <div
+            className="bg-surface p-5 rounded-xl shadow-soft border border-border w-[300px] animate-fade-in-up"
+            style={{ animationDelay: '120ms' }}
+          >
+            <div className="flex items-center gap-2 mb-3.5">
+              <CalendarDays size={14} className="text-muted" />
+              <span className="text-xs font-medium text-graphite">Esta semana</span>
             </div>
-            <div className="h-2 bg-surface-muted rounded-full w-3/4 mb-2" />
-            <div className="h-2 bg-surface-muted rounded-full w-1/2" />
+            <div className="grid grid-cols-7 gap-1.5 mb-4">
+              {WEEK_PREVIEW.map((d, i) => (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <span className="text-[9px] text-muted">{d.label}</span>
+                  <div
+                    className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-medium ${
+                      d.tone === 'crimson'
+                        ? 'bg-crimson text-white'
+                        : d.tone === 'navy'
+                        ? 'bg-navy-soft text-navy'
+                        : 'text-graphite'
+                    }`}
+                  >
+                    {d.day}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2.5 pt-3.5 border-t border-border">
+              {[
+                { name: 'Estruturas de Dados', pct: 72 },
+                { name: 'Cálculo II', pct: 45 },
+              ].map((s) => (
+                <div key={s.name}>
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-ink font-medium truncate">{s.name}</span>
+                    <span className="text-muted shrink-0 ml-2">{s.pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${s.pct < 50 ? 'bg-crimson' : 'bg-navy'}`}
+                      style={{ width: `${s.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 mt-4 pt-3.5 border-t border-border">
+              <span className="w-1.5 h-1.5 rounded-full bg-crimson shrink-0" />
+              <span className="text-[11px] text-graphite">
+                <span className="text-ink font-medium">Trabalho de BD</span> vence em 3 dias
+              </span>
+            </div>
           </div>
 
-          <div className="bg-surface p-5 rounded-xl shadow-soft border border-border max-w-xs transform translate-x-12 -translate-y-4 rotate-3">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-navy-soft flex items-center justify-center">
-                <div className="w-3 h-3 bg-navy rounded-full" />
+          <div
+            className="bg-surface px-4 py-3 rounded-xl shadow-soft border border-border w-fit transform translate-x-10 -translate-y-3 rotate-2 animate-fade-in-up"
+            style={{ animationDelay: '220ms' }}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-success-soft flex items-center justify-center shrink-0">
+                <Timer size={13} className="text-success" />
               </div>
-              <div className="text-sm font-semibold text-ink">Física Quântica</div>
-            </div>
-            <div className="w-full bg-surface-muted rounded-full h-2">
-              <div className="bg-navy h-2 rounded-full" style={{ width: '75%' }} />
+              <div>
+                <p className="text-[11px] font-semibold text-ink leading-tight">32 min de foco</p>
+                <p className="text-[10px] text-muted leading-tight">Estruturas de Dados</p>
+              </div>
             </div>
           </div>
         </div>
@@ -166,37 +208,10 @@ export const Login: React.FC = () => {
               />
             </div>
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="w-full"
-              loading={isLoading}
-              disabled={isGuestLoading}
-              icon={<LogIn size={18} />}
-            >
+            <Button type="submit" variant="primary" size="lg" className="w-full" loading={isLoading} icon={<LogIn size={18} />}>
               Entrar
             </Button>
           </form>
-
-          <div className="my-6 flex items-center">
-            <div className="flex-1 border-t border-border" />
-            <span className="px-4 text-sm text-muted font-medium">ou</span>
-            <div className="flex-1 border-t border-border" />
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full"
-            loading={isGuestLoading}
-            disabled={isLoading}
-            icon={<UserCircle size={20} />}
-            onClick={handleGuestLogin}
-          >
-            Entrar como Visitante
-          </Button>
 
           <p className="mt-8 text-center text-sm text-graphite">
             Ainda não possui conta?{' '}

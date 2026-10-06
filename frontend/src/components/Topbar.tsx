@@ -194,7 +194,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
           {profileOpen && (
             <div className="absolute right-0 mt-2 w-52 bg-surface border border-border rounded-lg shadow-float py-1.5 z-40 animate-scale-in">
               <div className="px-3.5 py-2 border-b border-border mb-1">
-                <p className="text-sm font-medium text-ink truncate">{user?.name || 'Visitante'}</p>
+                <p className="text-sm font-medium text-ink truncate">{user?.name || 'Usuário'}</p>
                 <p className="text-xs text-muted truncate">{user?.email}</p>
               </div>
               <Link
