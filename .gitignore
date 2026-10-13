@@ -31,6 +31,7 @@ Thumbs.db
 # Build
 frontend/dist/
 
-# Alembic
-backend/alembic/versions/*.py
-!backend/alembic/versions/.gitkeep
+# Migrações Alembic são código do produto e devem ser versionadas.
+
+# Backups locais do banco
+backend/.backups/

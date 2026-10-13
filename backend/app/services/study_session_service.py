@@ -4,13 +4,19 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.study_session import StudySession, StudySessionStatus
 from app.models.subject import Subject
 from app.models.task import Task
 from app.schemas.study_session import StudySessionCreate, StudySessionWithContext
+from app.services.academic_context import AcademicContextNotFoundError, resolve_subject_id
 
 ACTIVE_STATUSES = (StudySessionStatus.EM_ANDAMENTO, StudySessionStatus.PAUSADA)
+
+
+class ActiveStudySessionError(ValueError):
+    """O usuário já possui uma sessão em andamento ou pausada."""
 
 
 def _to_with_context(session: StudySession, subject_name: Optional[str], task_title: Optional[str]) -> StudySessionWithContext:
@@ -58,20 +64,18 @@ def get_session_by_id(db: Session, session_id: int, user_id: int) -> Optional[St
 def start_session(db: Session, payload: StudySessionCreate, user_id: int) -> Optional[StudySession]:
     """
     Retorna None se subject_id/task_id foram informados mas não pertencem ao
-    usuário. A checagem de "já existe uma sessão ativa" é feita no endpoint
-    (chamando get_active_session antes), não aqui.
+    usuário. O endpoint verifica a sessão ativa antecipadamente; o índice
+    único cobre a disputa entre requisições que passaram por essa checagem.
     """
-    if payload.subject_id is not None:
-        if not db.query(Subject).filter(Subject.id == payload.subject_id, Subject.user_id == user_id).first():
-            return None
-    if payload.task_id is not None:
-        if not db.query(Task).filter(Task.id == payload.task_id, Task.user_id == user_id).first():
-            return None
+    try:
+        subject_id = resolve_subject_id(db, user_id, payload.subject_id, payload.task_id)
+    except AcademicContextNotFoundError:
+        return None
 
     now = datetime.now(timezone.utc)
     session = StudySession(
         user_id=user_id,
-        subject_id=payload.subject_id,
+        subject_id=subject_id,
         task_id=payload.task_id,
         status=StudySessionStatus.EM_ANDAMENTO,
         started_at=now,
@@ -79,7 +83,15 @@ def start_session(db: Session, payload: StudySessionCreate, user_id: int) -> Opt
         accumulated_seconds=0,
     )
     db.add(session)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if get_active_session(db, user_id) is not None:
+            raise ActiveStudySessionError(
+                "Já existe uma sessão de estudo em andamento ou pausada. Finalize-a antes de iniciar outra."
+            ) from exc
+        raise
     db.refresh(session)
     return session
 

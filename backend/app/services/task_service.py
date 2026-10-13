@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import case
 from app.models.task import Task
 from app.models.subject import Subject
+from app.models.calendar_event import CalendarEvent
 from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskWithSubject
 from typing import List, Optional
 
@@ -11,6 +12,7 @@ def get_tasks_by_subject(db: Session, subject_id: int, user_id: int, skip: int =
     """
     return db.query(Task).join(Subject).filter(
         Task.subject_id == subject_id,
+        Task.user_id == user_id,
         Subject.user_id == user_id
     ).offset(skip).limit(limit).all()
 
@@ -27,7 +29,7 @@ def get_tasks_for_user(db: Session, user_id: int) -> List[TaskWithSubject]:
     rows = (
         db.query(Task, Subject.name, Subject.color)
         .join(Subject, Task.subject_id == Subject.id)
-        .filter(Subject.user_id == user_id)
+        .filter(Task.user_id == user_id, Subject.user_id == user_id)
         .order_by(
             case((Task.due_date.is_(None), 1), else_=0),
             Task.due_date.asc(),
@@ -62,6 +64,7 @@ def get_task_by_id(db: Session, task_id: int, user_id: int) -> Optional[Task]:
     """
     return db.query(Task).join(Subject).filter(
         Task.id == task_id,
+        Task.user_id == user_id,
         Subject.user_id == user_id
     ).first()
 
@@ -97,6 +100,16 @@ def update_task(db: Session, task_id: int, task_update: TaskUpdate, user_id: int
         return None
 
     update_data = task_update.model_dump(exclude_unset=True)
+    new_subject_id = update_data.get("subject_id", db_task.subject_id)
+    if new_subject_id != db_task.subject_id:
+        subject = db.query(Subject).filter(Subject.id == new_subject_id, Subject.user_id == user_id).first()
+        if subject is None:
+            return None
+        # A agenda acompanha a intenção atual. Execuções mantêm a disciplina
+        # registrada ao iniciar, preservando a atribuição histórica das horas.
+        db.query(CalendarEvent).filter(
+            CalendarEvent.task_id == task_id, CalendarEvent.user_id == user_id
+        ).update({CalendarEvent.subject_id: new_subject_id}, synchronize_session="fetch")
     for key, value in update_data.items():
         setattr(db_task, key, value)
 

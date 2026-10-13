@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import apiClient from '../api/client';
-import type { TaskWithSubject, Subject, TaskPriority } from '../types';
+import type { TaskWithSubject, Subject, TaskStatus } from '../types';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -12,18 +11,11 @@ import { Tabs } from '../components/ui/Tabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { RowSkeleton } from '../components/ui/Skeleton';
 import { isDueToday, isPastDue, isThisWeek, formatShortDate, getDueDateStatus, DUE_DATE_TEXT_CLASS } from '../lib/date';
-import { PRIORITY_META, PRIORITY_ORDER } from '../lib/tasks';
-import { TaskEditModal } from '../components/tasks/TaskEditModal';
+import { PRIORITY_META } from '../lib/tasks';
+import { TaskFormModal } from '../components/tasks/TaskFormModal';
 import { ClipboardList, Plus, Trash2, Pencil, Circle, CheckCircle2 } from 'lucide-react';
 
 type TabKey = 'todas' | 'hoje' | 'semana' | 'atrasadas' | 'concluida';
-
-interface TaskFormValues {
-  title: string;
-  subject_id: string;
-  due_date: string;
-  priority: TaskPriority;
-}
 
 export const Tasks: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -34,13 +26,15 @@ export const Tasks: React.FC = () => {
   const [sortBy, setSortBy] = useState<'due_date' | 'created_at' | 'priority'>('due_date');
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskWithSubject | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [pendingIds, setPendingIds] = useState<number[]>([]);
+  const pendingTaskIds = useRef(new Set<number>());
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const highlightId = searchParams.get('highlight');
 
-  const { register, handleSubmit, reset } = useForm<TaskFormValues>();
-
   const loadTasks = () => {
-    apiClient.get('/tasks/').then((res) => setTasks(res.data)).catch(console.error);
+    setLoadError(false);
+    apiClient.get<TaskWithSubject[]>('/tasks/').then((res) => setTasks(res.data)).catch(() => setLoadError(true));
   };
 
   useEffect(() => {
@@ -83,54 +77,36 @@ export const Tasks: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightId, tasks]);
 
-  const onCreate = handleSubmit(async (values) => {
-    try {
-      await apiClient.post('/tasks/', {
-        title: values.title,
-        subject_id: Number(values.subject_id),
-        due_date: values.due_date || null,
-        priority: values.priority || 'media',
-      });
-      toast.success('Tarefa criada.');
-      reset();
-      setShowForm(false);
-      loadTasks();
-    } catch {
-      toast.error('Não foi possível criar a tarefa.');
-    }
-  });
-
-  const onToggleComplete = async (task: TaskWithSubject) => {
-    const nextStatus = task.status === 'concluida' ? 'pendente' : 'concluida';
-    setTasks((prev) => prev?.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t)) ?? null);
-    try {
-      await apiClient.patch(`/tasks/${task.id}/status`, { status: nextStatus });
-      if (nextStatus === 'concluida') toast.success('Tarefa concluída!');
-    } catch {
-      toast.error('Não foi possível atualizar a tarefa.');
-      loadTasks();
-    }
+  const markPending = (taskId: number, pending: boolean) => {
+    if (pending) pendingTaskIds.current.add(taskId);
+    else pendingTaskIds.current.delete(taskId);
+    setPendingIds([...pendingTaskIds.current]);
   };
 
-  const onChangeStatus = async (taskId: number, status: string) => {
-    setTasks((prev) => prev?.map((t) => (t.id === taskId ? { ...t, status: status as TaskWithSubject['status'] } : t)) ?? null);
+  const onChangeStatus = async (taskId: number, status: TaskStatus) => {
+    if (pendingTaskIds.current.has(taskId)) return;
+    markPending(taskId, true);
+    setTasks((prev) => prev?.map((t) => (t.id === taskId ? { ...t, status } : t)) ?? null);
     try {
       await apiClient.patch(`/tasks/${taskId}/status`, { status });
+      toast.success(status === 'concluida' ? 'Tarefa concluída!' : 'Status atualizado.');
     } catch {
       toast.error('Não foi possível atualizar o status.');
       loadTasks();
-    }
+    } finally { markPending(taskId, false); }
   };
 
   const onDelete = async (taskId: number) => {
-    if (!window.confirm('Excluir esta tarefa? Essa ação não pode ser desfeita.')) return;
+    if (pendingTaskIds.current.has(taskId)) return;
+    if (!window.confirm('Excluir esta tarefa e seu prazo do calendário? Eventos agendados e histórico de estudo serão preservados. Esta ação não pode ser desfeita.')) return;
+    markPending(taskId, true);
     try {
       await apiClient.delete(`/tasks/${taskId}`);
       toast.success('Tarefa excluída.');
       loadTasks();
     } catch {
       toast.error('Não foi possível excluir a tarefa.');
-    }
+    } finally { markPending(taskId, false); }
   };
 
   const subjectScoped = useMemo(() => {
@@ -160,6 +136,8 @@ export const Tasks: React.FC = () => {
       list = [...list].sort((a, b) => b.created_at.localeCompare(a.created_at));
     } else if (sortBy === 'priority') {
       list = [...list].sort((a, b) => PRIORITY_META[b.priority].weight - PRIORITY_META[a.priority].weight);
+    } else {
+      list = [...list].sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'));
     }
     return list;
   }, [subjectScoped, tab, sortBy]);
@@ -168,79 +146,16 @@ export const Tasks: React.FC = () => {
   const isUnfiltered = tab === 'todas' && subjectFilter === 'todas';
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
       <SectionHeader
         title="Tarefas"
-        description="Visualize e gerencie todas as suas tarefas em um só lugar."
+        description="Organize entregas e estudos. Tarefas com prazo aparecem automaticamente no calendário."
         action={
           <Button size="sm" icon={<Plus size={15} />} onClick={() => setShowForm((v) => !v)}>
             Nova tarefa
           </Button>
         }
       />
-
-      {showForm && (
-        <Card className="mt-6 animate-scale-in" padding="md">
-          <form onSubmit={onCreate} className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[180px]">
-              <label className="text-xs text-graphite mb-1 block">Disciplina</label>
-              <select
-                {...register('subject_id', { required: true })}
-                defaultValue=""
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-crimson/20"
-              >
-                <option value="" disabled>
-                  Selecione...
-                </option>
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex-[2] min-w-[220px]">
-              <label className="text-xs text-graphite mb-1 block">Título</label>
-              <input
-                {...register('title', { required: true })}
-                placeholder="Ex.: Estudar árvores AVL"
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-crimson/20"
-              />
-            </div>
-            <div className="min-w-[160px]">
-              <label className="text-xs text-graphite mb-1 block">Prazo (opcional)</label>
-              <input
-                type="date"
-                {...register('due_date')}
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-crimson/20"
-              />
-            </div>
-            <div className="min-w-[130px]">
-              <label className="text-xs text-graphite mb-1 block">Prioridade</label>
-              <select
-                {...register('priority')}
-                defaultValue="media"
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-surface text-ink cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
-              >
-                {PRIORITY_ORDER.slice().reverse().map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_META[p].label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button type="submit">Criar</Button>
-            <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
-              Cancelar
-            </Button>
-          </form>
-          {subjects.length === 0 && (
-            <p className="text-xs text-warning mt-3">
-              Você ainda não tem nenhuma disciplina — crie uma disciplina antes de adicionar tarefas.
-            </p>
-          )}
-        </Card>
-      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3 mt-6 mb-4">
         <Tabs
@@ -257,6 +172,7 @@ export const Tasks: React.FC = () => {
         <div className="flex items-center gap-2">
           <select
             value={subjectFilter}
+            aria-label="Filtrar tarefas por disciplina"
             onChange={(e) => setSubjectFilter(e.target.value)}
             className="text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
@@ -269,6 +185,7 @@ export const Tasks: React.FC = () => {
           </select>
           <select
             value={sortBy}
+            aria-label="Ordenar tarefas"
             onChange={(e) => setSortBy(e.target.value as 'due_date' | 'created_at' | 'priority')}
             className="text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
@@ -279,7 +196,10 @@ export const Tasks: React.FC = () => {
         </div>
       </div>
 
-      {loading ? (
+      {loadError && <div role="alert" className="mb-4 p-4 border border-danger/30 rounded-lg flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-danger">Não foi possível carregar as tarefas.</p><Button variant="outline" onClick={loadTasks}>Tentar novamente</Button>
+      </div>}
+      {loading && !loadError ? (
         <Card padding="none">
           <div className="divide-y divide-border">
             <RowSkeleton />
@@ -287,7 +207,7 @@ export const Tasks: React.FC = () => {
             <RowSkeleton />
           </div>
         </Card>
-      ) : filtered.length === 0 ? (
+      ) : loading ? null : filtered.length === 0 ? (
         <Card padding="lg">
           <EmptyState
             icon={ClipboardList}
@@ -313,12 +233,13 @@ export const Tasks: React.FC = () => {
                   ref={(el) => {
                     rowRefs.current[String(task.id)] = el;
                   }}
-                  className={`flex items-center gap-3 p-4 transition-colors duration-700 ${
+                  className={`flex flex-wrap sm:flex-nowrap items-center gap-3 p-4 transition-colors duration-700 ${
                     String(task.id) === highlightId ? 'bg-crimson-soft' : ''
                   }`}
                 >
                   <button
-                    onClick={() => onToggleComplete(task)}
+                    onClick={() => onChangeStatus(task.id, task.status === 'concluida' ? 'pendente' : 'concluida')}
+                    disabled={pendingIds.includes(task.id)}
                     className={`shrink-0 transition-colors cursor-pointer ${
                       task.status === 'concluida' ? 'text-success' : 'text-muted hover:text-success'
                     }`}
@@ -327,7 +248,7 @@ export const Tasks: React.FC = () => {
                     {task.status === 'concluida' ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                   </button>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-[65%] sm:basis-auto">
                     <p
                       className={`text-sm font-medium truncate ${
                         task.status === 'concluida' ? 'line-through text-muted' : 'text-ink'
@@ -369,7 +290,9 @@ export const Tasks: React.FC = () => {
 
                   <select
                     value={task.status}
-                    onChange={(e) => onChangeStatus(task.id, e.target.value)}
+                    aria-label={`Status da tarefa ${task.title}`}
+                    disabled={pendingIds.includes(task.id)}
+                    onChange={(e) => onChangeStatus(task.id, e.target.value as TaskStatus)}
                     className="text-xs border border-border rounded-md px-2 py-1.5 bg-surface text-graphite shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
                   >
                     <option value="pendente">Pendente</option>
@@ -379,6 +302,7 @@ export const Tasks: React.FC = () => {
 
                   <button
                     onClick={() => setEditingTask(task)}
+                    disabled={pendingIds.includes(task.id)}
                     className="text-muted hover:text-ink transition-colors cursor-pointer shrink-0"
                     aria-label="Editar tarefa"
                   >
@@ -387,6 +311,7 @@ export const Tasks: React.FC = () => {
 
                   <button
                     onClick={() => onDelete(task.id)}
+                    disabled={pendingIds.includes(task.id)}
                     className="text-muted hover:text-danger transition-colors cursor-pointer shrink-0"
                     aria-label="Excluir tarefa"
                   >
@@ -399,12 +324,14 @@ export const Tasks: React.FC = () => {
         </Card>
       )}
 
-      <TaskEditModal
+      <TaskFormModal
+        open={showForm || !!editingTask}
         task={editingTask}
         subjects={subjects}
-        onClose={() => setEditingTask(null)}
+        onClose={() => { setEditingTask(null); setShowForm(false); }}
         onSaved={() => {
           setEditingTask(null);
+          setShowForm(false);
           loadTasks();
         }}
       />

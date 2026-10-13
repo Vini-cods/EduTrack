@@ -11,6 +11,7 @@ import {
   HOUR_HEIGHT,
 } from '../../lib/calendar';
 import type { CalendarEventWithSubject } from '../../types';
+import { calendarItemKey } from '../../lib/calendarProjection';
 
 interface TimeGridProps {
   days: Date[];
@@ -42,7 +43,8 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
   const showNowLine = now.getHours() >= GRID_START_HOUR && now.getHours() < GRID_END_HOUR;
 
   return (
-    <div className="border border-border rounded-xl bg-surface overflow-hidden">
+    <div className="border border-border rounded-xl bg-surface overflow-x-auto">
+      <div className={days.length > 1 ? 'min-w-[640px]' : ''}>
       {/* Cabeçalho com os dias — fica fixo enquanto as horas rolam abaixo */}
       <div className="flex border-b border-border">
         <div className="w-14 shrink-0" />
@@ -63,6 +65,25 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
         })}
       </div>
 
+      {events.some((event) => event.all_day) && (
+        <div className="flex border-b border-border bg-surface-muted/30">
+          <div className="w-14 shrink-0 px-1 py-3 text-[10px] text-muted text-center">Prazos<br />sem hora</div>
+          {days.map((day) => (
+            <div key={day.toISOString()} className="flex-1 min-w-0 p-1 border-l border-border space-y-1">
+              {eventsOnDay(events, day).filter((event) => event.all_day).map((event) => (
+                <button type="button" key={calendarItemKey(event)} onClick={() => onEventClick(event)}
+                  title={event.title}
+                  aria-label={`Editar prazo da tarefa ${event.title}${event.task_status === 'concluida' ? ', concluída' : ''}`}
+                  className="w-full text-left p-1.5 text-[11px] leading-tight bg-crimson-soft text-ink border-l-2 border-crimson rounded-sm cursor-pointer hover:brightness-95">
+                  <span className="block text-[9px] font-semibold uppercase tracking-wider text-crimson">Prazo{event.task_status === 'concluida' ? ' · concluída' : ''}</span>
+                  <span className={event.task_status === 'concluida' ? 'line-through text-muted' : ''}>{event.title}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Grade de horas, rolável */}
       <div className="flex relative overflow-y-auto" style={{ maxHeight: 600 }}>
         <div className="w-14 shrink-0 relative" style={{ height: TOTAL_HEIGHT }}>
@@ -78,7 +99,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
         </div>
 
         {days.map((day) => {
-          const positioned = layoutDayEvents(eventsOnDay(events, day));
+          const positioned = layoutDayEvents(eventsOnDay(events, day).filter((event) => !event.all_day));
           const isToday = isSameDay(day, today);
           return (
             <div
@@ -111,7 +132,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
                 const widthPct = 100 / totalColumns;
                 return (
                   <button
-                    key={event.id}
+                    key={calendarItemKey(event)}
                     onClick={(e) => {
                       e.stopPropagation();
                       onEventClick(event);
@@ -134,6 +155,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

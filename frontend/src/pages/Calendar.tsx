@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import apiClient from '../api/client';
-import type { CalendarEventWithSubject, Subject } from '../types';
+import type { CalendarEventWithSubject, Subject, TaskWithSubject } from '../types';
 import { Button } from '../components/ui/Button';
 import { Tabs } from '../components/ui/Tabs';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -10,7 +10,9 @@ import { MonthView } from '../components/calendar/MonthView';
 import { WeekView } from '../components/calendar/WeekView';
 import { DayView } from '../components/calendar/DayView';
 import { EventModal } from '../components/calendar/EventModal';
-import { getMonthGrid, getWeekDays, CATEGORY_META } from '../lib/calendar';
+import { TaskFormModal } from '../components/tasks/TaskFormModal';
+import { getMonthGrid, getWeekDays, CATEGORY_META, toDatetimeLocalValue } from '../lib/calendar';
+import { projectCalendarItems } from '../lib/calendarProjection';
 import type { EventCategory } from '../types';
 
 type ViewMode = 'month' | 'week' | 'day';
@@ -39,7 +41,11 @@ export const Calendar: React.FC = () => {
   const [view, setView] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEventWithSubject[] | null>(null);
+  const [eventsError, setEventsError] = useState(false);
+  const eventsRequest = useRef<AbortController | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [tasks, setTasks] = useState<TaskWithSubject[]>([]);
+  const [editingTask, setEditingTask] = useState<TaskWithSubject | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEventWithSubject | null>(null);
   const [initialDate, setInitialDate] = useState<Date | null>(null);
@@ -57,18 +63,31 @@ export const Calendar: React.FC = () => {
   }, [view, currentDate]);
 
   const loadEvents = useCallback(() => {
+    eventsRequest.current?.abort();
+    const request = new AbortController();
+    eventsRequest.current = request;
+    setEvents(null);
+    setEventsError(false);
     const start = new Date(rangeStart);
     start.setHours(0, 0, 0, 0);
     const end = new Date(rangeEnd);
     end.setHours(23, 59, 59, 999);
-    apiClient
-      .get('/calendar-events/', { params: { start: start.toISOString(), end: end.toISOString() } })
-      .then((res) => setEvents(res.data))
-      .catch(console.error);
+    Promise.all([
+      apiClient.get<CalendarEventWithSubject[]>('/calendar-events/', { signal: request.signal,
+        params: { start: toDatetimeLocalValue(start), end: toDatetimeLocalValue(end) + ':59.999' } }),
+      apiClient.get<TaskWithSubject[]>('/tasks/', { signal: request.signal }),
+    ])
+      .then(([eventResponse, taskResponse]) => {
+        if (request.signal.aborted) return;
+        setTasks(taskResponse.data);
+        setEvents(projectCalendarItems(eventResponse.data, taskResponse.data, start, end));
+      })
+      .catch(() => { if (!request.signal.aborted) setEventsError(true); });
   }, [rangeStart, rangeEnd]);
 
   useEffect(() => {
     loadEvents();
+    return () => eventsRequest.current?.abort();
   }, [loadEvents]);
 
   useEffect(() => {
@@ -88,13 +107,18 @@ export const Calendar: React.FC = () => {
       }
     }
     if (searchParams.get('new') === '1') {
-      openCreateModal(dateParam ? new Date(dateParam + 'T00:00:00') : null);
+      const parsed = dateParam ? new Date(dateParam + 'T00:00:00') : null;
+      setEditingEvent(null);
+      setInitialDate(parsed && !isNaN(parsed.getTime()) ? parsed : null);
+      setModalOpen(true);
     }
     if (dateParam || searchParams.get('new') === '1') {
-      setSearchParams({}, { replace: true });
+      const next = new URLSearchParams(searchParams);
+      next.delete('date');
+      next.delete('new');
+      setSearchParams(next, { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   const openCreateModal = (date: Date | null) => {
     setEditingEvent(null);
@@ -103,6 +127,10 @@ export const Calendar: React.FC = () => {
   };
 
   const openEditModal = (event: CalendarEventWithSubject) => {
+    if (event.source === 'task') {
+      setEditingTask(tasks.find((task) => task.id === event.task_id) ?? null);
+      return;
+    }
     setEditingEvent(event);
     setInitialDate(null);
     setModalOpen(true);
@@ -131,11 +159,12 @@ export const Calendar: React.FC = () => {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl font-semibold text-ink">Calendário</h1>
           <p className="text-graphite mt-1 capitalize">{periodLabel(view, currentDate)}</p>
+          <p className="text-xs text-muted mt-2">Aulas, sessões e eventos. Tarefas com data aparecem automaticamente como prazos.</p>
         </div>
         <Button icon={<Plus size={16} />} onClick={() => openCreateModal(view === 'day' ? currentDate : null)}>
           Novo evento
@@ -176,6 +205,9 @@ export const Calendar: React.FC = () => {
 
       {/* Legenda de categorias */}
       <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-5">
+        <span className="flex items-center gap-1.5 text-xs text-graphite">
+          <span className="w-2 h-2 border border-crimson" /> Prazo de tarefa (sem horário)
+        </span>
         {CATEGORIES.map((c) => (
           <span key={c} className="flex items-center gap-1.5 text-xs text-graphite">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CATEGORY_META[c].color }} />
@@ -184,9 +216,13 @@ export const Calendar: React.FC = () => {
         ))}
       </div>
 
-      <div className="mt-5">
+      {eventsError && <div role="alert" className="mt-5 p-4 border border-danger/30 rounded-lg flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-danger">Não foi possível carregar o calendário.</p>
+        <Button variant="outline" onClick={loadEvents}>Tentar novamente</Button>
+      </div>}
+      <div className="mt-5" aria-busy={events === null && !eventsError}>
         {events === null ? (
-          <Skeleton className="h-[500px] w-full rounded-xl" />
+          eventsError ? null : <Skeleton className="h-[500px] w-full rounded-xl" />
         ) : view === 'month' ? (
           <MonthView
             monthDate={currentDate}
@@ -210,6 +246,12 @@ export const Calendar: React.FC = () => {
         subjects={subjects}
         initialDate={initialDate}
         event={editingEvent}
+      />
+      <TaskFormModal
+        task={editingTask}
+        subjects={subjects}
+        onClose={() => setEditingTask(null)}
+        onSaved={() => { setEditingTask(null); loadEvents(); }}
       />
     </div>
   );

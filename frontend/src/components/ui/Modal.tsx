@@ -1,4 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
+
+let openModalCount = 0;
+let originalOverflow = '';
 
 interface ModalProps {
   open: boolean;
@@ -23,27 +26,59 @@ export const Modal: React.FC<ModalProps> = ({
   panelClassName = '',
   ariaLabel,
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
 
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusable = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+    ) || []).filter((element) => element.getClientRects().length > 0);
+    const frame = requestAnimationFrame(() => (focusable()[0] || panelRef.current)?.focus());
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== dialogRef.current) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeRef.current();
+      }
+      if (e.key === 'Tab') {
+        const elements = focusable();
+        const first = elements[0];
+        const last = elements[elements.length - 1];
+        if (!first) { e.preventDefault(); panelRef.current?.focus(); return; }
+        if (!panelRef.current?.contains(document.activeElement) || (e.shiftKey && document.activeElement === first)) {
+          e.preventDefault(); (e.shiftKey ? last : first).focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKeyDown);
 
-    const previousOverflow = document.body.style.overflow;
+    if (openModalCount === 0) originalOverflow = document.body.style.overflow;
+    openModalCount += 1;
     document.body.style.overflow = 'hidden';
 
     return () => {
+      cancelAnimationFrame(frame);
       document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
+      openModalCount -= 1;
+      if (openModalCount === 0) document.body.style.overflow = originalOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
   return (
     <div
+      ref={dialogRef}
       className={`fixed inset-0 z-[100] flex justify-center px-4 ${
         align === 'top' ? 'items-start pt-[12vh]' : 'items-center'
       }`}
@@ -57,7 +92,9 @@ export const Modal: React.FC<ModalProps> = ({
         aria-hidden="true"
       />
       <div
-        className={`relative w-full bg-surface rounded-xl shadow-float border border-border animate-scale-in ${panelClassName}`}
+        ref={panelRef}
+        tabIndex={-1}
+        className={`relative w-full max-h-[90dvh] overflow-y-auto overscroll-contain bg-surface rounded-xl shadow-float border border-border animate-scale-in ${panelClassName}`}
       >
         {children}
       </div>

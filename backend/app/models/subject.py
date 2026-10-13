@@ -48,3 +48,4 @@ class Subject(Base):
     # é obrigatório em Material, então excluir a disciplina deve excluir
     # seus materiais também, coerente com o ondelete="CASCADE" da FK.
     materials = relationship("Material", back_populates="subject", cascade="all, delete-orphan")
+    notes = relationship("Note", back_populates="subject")

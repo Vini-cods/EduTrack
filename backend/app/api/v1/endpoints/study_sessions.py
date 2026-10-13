@@ -12,6 +12,7 @@ from app.schemas.study_session import (
     StudySessionWithContext,
 )
 from app.services import study_session_service
+from app.services.academic_context import AcademicContextMismatchError
 
 router = APIRouter()
 
@@ -40,7 +41,12 @@ def start_session(
             status_code=409,
             detail="Já existe uma sessão de estudo em andamento ou pausada. Finalize-a antes de iniciar outra.",
         )
-    session = study_session_service.start_session(db=db, payload=payload, user_id=current_user.id)
+    try:
+        session = study_session_service.start_session(db=db, payload=payload, user_id=current_user.id)
+    except AcademicContextMismatchError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except study_session_service.ActiveStudySessionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if session is None:
         raise HTTPException(status_code=404, detail="Disciplina ou tarefa não encontrada")
     return session

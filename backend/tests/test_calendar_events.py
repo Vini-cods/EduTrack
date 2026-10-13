@@ -170,3 +170,147 @@ def test_user_cannot_delete_other_users_event_series(client, auth_headers):
     other_headers = make_auth_headers(client, "outro-cal2@example.com")
     resp = client.delete(f"/api/v1/calendar-events/series/{created['recurrence_group_id']}", headers=other_headers)
     assert resp.status_code == 404
+
+
+def test_study_block_derives_subject_from_task(client, auth_headers, subject):
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar grafos", "subject_id": subject["id"]}, headers=auth_headers).json()
+    created = client.post(
+        "/api/v1/calendar-events/",
+        json={"title": task["title"], "category": "estudo", "task_id": task["id"], "start_datetime": "2026-10-12T10:00:00"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 201
+    assert created.json()["events"][0]["subject_id"] == subject["id"]
+    listed = client.get("/api/v1/calendar-events/", headers=auth_headers).json()
+    assert listed[0]["subject_name"] == subject["name"]
+
+
+def test_study_block_rejects_mismatched_task_subject_on_create_and_update(client, auth_headers, subject):
+    other_subject = client.post("/api/v1/subjects/", json={"name": "Redes"}, headers=auth_headers).json()
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar grafos", "subject_id": subject["id"]}, headers=auth_headers).json()
+    payload = {"title": task["title"], "category": "estudo", "task_id": task["id"], "start_datetime": "2026-10-12T10:00:00"}
+    invalid = client.post("/api/v1/calendar-events/", json={**payload, "subject_id": other_subject["id"]}, headers=auth_headers)
+    assert invalid.status_code == 422
+    assert client.get("/api/v1/calendar-events/", headers=auth_headers).json() == []
+
+    event = client.post("/api/v1/calendar-events/", json=payload, headers=auth_headers).json()["events"][0]
+    invalid = client.put(f"/api/v1/calendar-events/{event['id']}", json={"subject_id": other_subject["id"]}, headers=auth_headers)
+    assert invalid.status_code == 422
+    saved = client.get("/api/v1/calendar-events/", headers=auth_headers).json()[0]
+    assert saved["task_id"] == task["id"]
+    assert saved["subject_id"] == subject["id"]
+
+    # Remover o vínculo explicitamente permite transformar o bloco em outro contexto.
+    detached = client.put(
+        f"/api/v1/calendar-events/{event['id']}",
+        json={"task_id": None, "subject_id": other_subject["id"]},
+        headers=auth_headers,
+    )
+    assert detached.status_code == 200
+    assert detached.json()["task_id"] is None
+    assert detached.json()["subject_id"] == other_subject["id"]
+
+
+def test_replacing_only_task_derives_new_subject(client, auth_headers, subject):
+    other_subject = client.post("/api/v1/subjects/", json={"name": "Redes"}, headers=auth_headers).json()
+    tasks = [
+        client.post("/api/v1/tasks/", json={"title": "Revisar", "subject_id": subject_id}, headers=auth_headers).json()
+        for subject_id in (subject["id"], other_subject["id"])
+    ]
+    event = client.post(
+        "/api/v1/calendar-events/",
+        json={"title": "Revisar", "category": "estudo", "task_id": tasks[0]["id"], "start_datetime": "2026-10-12T10:00:00"},
+        headers=auth_headers,
+    ).json()["events"][0]
+    updated = client.put(f"/api/v1/calendar-events/{event['id']}", json={"task_id": tasks[1]["id"]}, headers=auth_headers)
+    assert updated.status_code == 200
+    assert updated.json()["subject_id"] == other_subject["id"]
+
+
+def test_event_partial_update_validates_merged_interval_and_required_fields(client, auth_headers):
+    event = client.post(
+        "/api/v1/calendar-events/",
+        json={"title": "Estudar", "start_datetime": "2026-10-12T10:00:00", "end_datetime": "2026-10-12T11:00:00"},
+        headers=auth_headers,
+    ).json()["events"][0]
+    for invalid in (
+        {"start_datetime": "2026-10-12T12:00:00"},
+        {"end_datetime": "2026-10-12T09:00:00"},
+        {"start_datetime": None},
+        {"title": None},
+        {"title": "   "},
+        {"category": None},
+    ):
+        assert client.put(f"/api/v1/calendar-events/{event['id']}", json=invalid, headers=auth_headers).status_code == 422
+    saved = client.get("/api/v1/calendar-events/", headers=auth_headers).json()[0]
+    assert saved["start_datetime"] == event["start_datetime"]
+    assert saved["end_datetime"] == event["end_datetime"]
+    moved = client.put(
+        f"/api/v1/calendar-events/{event['id']}",
+        json={"start_datetime": "2026-10-12T12:00:00", "end_datetime": "2026-10-12T13:00:00"},
+        headers=auth_headers,
+    )
+    assert moved.status_code == 200
+
+
+def test_invalid_calendar_filters_and_mixed_timezone_return_422(client, auth_headers):
+    for params in (
+        {"start": "invalid-date"},
+        {"end": "invalid-date"},
+        {"start": "2026-10-13T00:00:00", "end": "2026-10-12T00:00:00"},
+    ):
+        assert client.get("/api/v1/calendar-events/", params=params, headers=auth_headers).status_code == 422
+    mixed = client.post(
+        "/api/v1/calendar-events/",
+        json={"title": "Estudar", "start_datetime": "2026-10-12T10:00:00", "end_datetime": "2026-10-12T11:00:00Z"},
+        headers=auth_headers,
+    )
+    assert mixed.status_code == 422
+
+
+def test_recurrence_without_occurrences_is_rejected(client, auth_headers):
+    # Segunda-feira, com recorrência apenas na terça e fim na própria segunda.
+    invalid = client.post(
+        "/api/v1/calendar-events/",
+        json={"title": "Estudar", "start_datetime": "2026-10-12T10:00:00", "recurrence": {"type": "weekly", "days_of_week": [1], "until": "2026-10-12"}},
+        headers=auth_headers,
+    )
+    assert invalid.status_code == 422
+    assert client.get("/api/v1/calendar-events/", headers=auth_headers).json() == []
+
+
+def test_user_cannot_link_or_update_other_users_planning_context(client, auth_headers, subject):
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar", "subject_id": subject["id"]}, headers=auth_headers).json()
+    other_headers = make_auth_headers(client, "planner-outsider@example.com")
+    own_event = client.post(
+        "/api/v1/calendar-events/", json={"title": "Meu evento", "start_datetime": "2026-10-12T10:00:00"}, headers=other_headers
+    ).json()["events"][0]
+    for context in ({"subject_id": subject["id"]}, {"task_id": task["id"]}):
+        assert client.post(
+            "/api/v1/calendar-events/", json={"title": "Inválido", "start_datetime": "2026-10-12T10:00:00", **context}, headers=other_headers
+        ).status_code == 404
+        assert client.put(f"/api/v1/calendar-events/{own_event['id']}", json=context, headers=other_headers).status_code == 404
+    listed = client.get("/api/v1/calendar-events/", headers=other_headers).json()
+    assert listed[0]["task_id"] is None
+    assert listed[0]["subject_id"] is None
+
+
+def test_calendar_range_includes_overnight_study_overlap(client, auth_headers):
+    for title, start, end in (
+        ("Atravessa meia-noite", "2026-10-11T23:30:00", "2026-10-12T01:00:00"),
+        ("Já terminou", "2026-10-11T22:00:00", "2026-10-11T23:00:00"),
+        ("Amanhã", "2026-10-13T01:00:00", "2026-10-13T02:00:00"),
+        ("Instante hoje", "2026-10-12T12:00:00", None),
+    ):
+        assert client.post(
+            "/api/v1/calendar-events/",
+            json={"title": title, "category": "estudo", "start_datetime": start, "end_datetime": end},
+            headers=auth_headers,
+        ).status_code == 201
+    listed = client.get(
+        "/api/v1/calendar-events/",
+        params={"start": "2026-10-12T00:00:00", "end": "2026-10-12T23:59:59"},
+        headers=auth_headers,
+    )
+    assert listed.status_code == 200
+    assert [event["title"] for event in listed.json()] == ["Atravessa meia-noite", "Instante hoje"]

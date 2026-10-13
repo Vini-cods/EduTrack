@@ -321,7 +321,7 @@ export const Dashboard: React.FC = () => {
                     <h2 className="font-serif text-lg font-semibold text-ink">Carga da semana</h2>
                     {weekPlannedHours > 0 && (
                       <Link to="/study" className="text-xs text-graphite hover:text-ink font-medium">
-                        {weekPlannedHours}h planejadas
+                        {weekPlannedHours}h estimadas
                       </Link>
                     )}
                   </div>

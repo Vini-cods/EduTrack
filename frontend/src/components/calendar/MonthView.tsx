@@ -1,5 +1,6 @@
 import React from 'react';
 import { getMonthGrid, eventsOnDay, isSameDay, CATEGORY_META, WEEKDAY_SHORT } from '../../lib/calendar';
+import { calendarItemKey } from '../../lib/calendarProjection';
 import type { CalendarEventWithSubject } from '../../types';
 
 interface MonthViewProps {
@@ -38,14 +39,16 @@ export const MonthView: React.FC<MonthViewProps> = ({ monthDate, events, onDayCl
           const overflow = dayEvents.length - visible.length;
 
           return (
-            <button
+            <div
               key={i}
-              onClick={() => onDayClick(day)}
-              className={`min-h-[104px] p-1.5 text-left border-b border-r border-border last:border-r-0 [&:nth-child(7n)]:border-r-0 flex flex-col gap-1 transition-colors hover:bg-surface-muted/60 cursor-pointer ${
+              className={`min-h-[104px] p-1 sm:p-1.5 text-left border-b border-r border-border last:border-r-0 [&:nth-child(7n)]:border-r-0 flex flex-col gap-1 ${
                 isCurrentMonth ? '' : 'bg-surface-muted/30'
               }`}
             >
-              <span
+              <button
+                type="button"
+                onClick={() => onDayClick(day)}
+                aria-label={`Criar evento em ${day.toLocaleDateString('pt-BR')}`}
                 className={`text-xs w-6 h-6 flex items-center justify-center rounded-full font-medium shrink-0 ${
                   isToday
                     ? 'bg-crimson text-white'
@@ -55,26 +58,29 @@ export const MonthView: React.FC<MonthViewProps> = ({ monthDate, events, onDayCl
                 }`}
               >
                 {day.getDate()}
-              </span>
+              </button>
 
               <div className="space-y-1 min-w-0">
                 {visible.map((event) => {
                   const meta = CATEGORY_META[event.category];
                   return (
-                    <div
-                      key={event.id}
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
+                      key={calendarItemKey(event)}
+                      title={`${event.source === 'task' ? 'Prazo' : meta.label}: ${event.title}${event.task_status === 'concluida' ? ' (concluída)' : ''}`}
+                      aria-label={`${event.source === 'task' ? 'Editar prazo da tarefa' : 'Editar evento'} ${event.title}${event.task_status === 'concluida' ? ', concluída' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEventClick(event);
                       }}
-                      className="flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md truncate hover:brightness-95"
+                      className="w-full text-left flex items-center gap-1 text-[11px] px-1 py-0.5 rounded-sm truncate hover:brightness-95 cursor-pointer"
                       style={{ backgroundColor: meta.soft }}
                     >
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
-                      <span className="truncate text-ink">{event.title}</span>
-                    </div>
+                      <span className={`truncate text-ink ${event.task_status === 'concluida' ? 'line-through opacity-70' : ''}`}>
+                        {event.source === 'task' && <span className="font-semibold">Prazo · </span>}{event.title}
+                      </span>
+                    </button>
                   );
                 })}
                 {overflow > 0 && (
@@ -89,7 +95,7 @@ export const MonthView: React.FC<MonthViewProps> = ({ monthDate, events, onDayCl
                   </button>
                 )}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>

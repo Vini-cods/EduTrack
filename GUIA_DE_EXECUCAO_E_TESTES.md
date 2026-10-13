@@ -5,6 +5,10 @@
 > (cobertura de testes/ownership) e `openspec.md` (verificação de estrutura
 > OpenSpec — não encontrada neste projeto).
 
+> Continuação em 12/10/2026: consulte `docs/DEVELOPMENT_STATUS.md` para a
+> evolução do Study Planner/Focus e os limites atuais. Migrações agora são
+> versionadas e incluem a criação do schema acadêmico desde um banco vazio.
+
 Este guia parte do zero: clonar/extrair o projeto, instalar tudo, rodar backend e
 frontend, testar e validar. Todos os comandos abaixo assumem que você está na
 raiz do projeto (a pasta `EduTrack/`, com `backend/` e `frontend/` dentro dela).
@@ -80,11 +84,9 @@ que você já tinha criado) — não precisa rodar nada para começar a usar.
 
 Se preferir começar com um banco limpo (do zero):
 
-```bash
-cd backend
-rm edutrack.db
-alembic upgrade head
-```
+Use um arquivo SQLite novo na configuração `SQLITE_PATH` e execute
+`alembic upgrade head` dentro de `backend`. Preserve o banco existente;
+faça backup antes de atualizar um banco de uso real.
 
 Isso recria o schema inteiro (users, subjects, tasks, calendar_events,
 study_sessions, materials) vazio, pronto para registrar um usuário novo.
@@ -92,7 +94,7 @@ study_sessions, materials) vazio, pronto para registrar um usuário novo.
 Para conferir em qual migration o banco está:
 
 ```bash
-alembic current   # deve mostrar "ebf926553436 (head)"
+alembic current   # deve mostrar "c218e785d190 (head)"
 alembic history    # mostra a cadeia completa de migrations
 ```
 
@@ -148,7 +150,7 @@ cd backend
 pytest
 ```
 
-Saída esperada: **78 testes, todos passando** (mais alguns avisos de
+Os testes devem terminar sem falhas (mais alguns avisos de
 `DeprecationWarning` do `datetime.utcnow()`, que não afetam o resultado — é
 um aviso pré-existente do código de geração de JWT, não um erro).
 
@@ -259,7 +261,7 @@ Já sinalizados nas etapas anteriores, continuam válidos:
   enquanto `Task` grava o *valor* em minúsculas (`'media'`) — ambos
   funcionam corretamente pela API (todo o acesso passa pelo ORM), a
   diferença só aparece inspecionando o banco direto.
-- **Bundle do frontend sem code-splitting** (~915KB) — item já mapeado para
+- **Bundle do frontend sem code-splitting** (~940KB) — item já mapeado para
   a etapa de performance do roadmap original.
 - **Materials é só por URL, sem upload de arquivo** — não há infraestrutura
   de armazenamento de arquivo em nenhuma parte do backend.

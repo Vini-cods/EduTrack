@@ -1,5 +1,5 @@
 import type { CalendarEventWithSubject, EventCategory } from '../types';
-import { startOfWeek } from './date';
+import { startOfWeek } from './date.ts';
 
 export const CATEGORY_META: Record<EventCategory, { label: string; color: string; soft: string }> = {
   aula: { label: 'Aula', color: 'var(--color-navy)', soft: 'var(--color-navy-soft)' },

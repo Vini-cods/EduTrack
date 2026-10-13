@@ -6,6 +6,8 @@ Separação conceitual (ver CONTEXTO do projeto):
   StudySession = execução ("quanto tempo eu de fato fiquei estudando,
     com pausas reais"). Referencia subject/task quando fizer sentido, mas
     nunca duplica título/prazo/prioridade — isso continua vivendo só em Task.
+    A disciplina é o contexto no início da execução: mover a tarefa depois
+    não reclassifica retroativamente o tempo efetivamente estudado.
 
 Decisão de arquitetura — rastreamento de tempo com pausas:
 Em vez de gravar um evento por pausa/retomada (log de eventos), a sessão
@@ -29,7 +31,7 @@ Pomodoro, o que manteria a modelagem mais simples.
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -79,9 +81,23 @@ class StudySession(Base):
         nullable=False,
     )
 
+    # A checagem da API dá feedback antecipado; o índice também garante o
+    # invariante quando duas abas iniciam sessões ao mesmo tempo.
+    __table_args__ = (
+        Index(
+            "uq_study_sessions_active_user",
+            "user_id",
+            unique=True,
+            sqlite_where=status.in_((StudySessionStatus.EM_ANDAMENTO, StudySessionStatus.PAUSADA)),
+            postgresql_where=status.in_((StudySessionStatus.EM_ANDAMENTO, StudySessionStatus.PAUSADA)),
+            mssql_where=status.in_((StudySessionStatus.EM_ANDAMENTO, StudySessionStatus.PAUSADA)),
+        ),
+    )
+
     user = relationship("User", back_populates="study_sessions")
     subject = relationship("Subject", back_populates="study_sessions")
     task = relationship("Task", back_populates="study_sessions")
+    notes = relationship("Note", back_populates="study_session")
 
     @property
     def elapsed_seconds(self) -> int:

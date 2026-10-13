@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 /*
   =========================================================================
@@ -27,12 +28,14 @@
 
   /* Azul-marinho — cor estrutural (navegação ativa, cabeçalhos, dados) */
   --color-navy: #1c2b4a;
+  --color-navy-fill: #1c2b4a;
   --color-navy-light: #2f4370;
   --color-navy-dark: #121d33;
   --color-navy-soft: #e8ecf3;
 
   /* Crimson — accent (CTAs, destaques, urgência). Usar com moderação. */
   --color-crimson: #9a2b2f;
+  --color-crimson-fill: #9a2b2f;
   --color-crimson-light: #b8474b;
   --color-crimson-dark: #741f22;
   --color-crimson-soft: #f7e9e8;
@@ -57,6 +60,52 @@
   --shadow-soft: 0 1px 2px rgba(28, 27, 25, 0.06), 0 4px 16px -4px rgba(28, 27, 25, 0.10);
   --shadow-float: 0 12px 32px -8px rgba(28, 27, 25, 0.22), 0 4px 12px -4px rgba(28, 27, 25, 0.12);
 }
+
+:root { color-scheme: light; }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: #10141b;
+  --color-surface: #191e27;
+  --color-surface-muted: #242b36;
+  --color-ink: #f1efe9;
+  --color-graphite: #c1c4cb;
+  --color-muted: #9ba3b2;
+  --color-border: #343b47;
+  --color-border-strong: #515c6d;
+  --color-navy: #a8c0ed;
+  --color-navy-light: #bacdf2;
+  --color-navy-dark: #cedbf6;
+  --color-navy-soft: #253349;
+  --color-navy-fill: #273e64;
+  --color-crimson: #f29ba2;
+  --color-crimson-light: #ffb6ba;
+  --color-crimson-dark: #ffb9be;
+  --color-crimson-soft: #3c252c;
+  --color-crimson-fill: #a32c3d;
+  --color-wine: #d7a0b3;
+  --color-success: #8bcea9;
+  --color-success-soft: #203c30;
+  --color-warning: #e7be72;
+  --color-warning-soft: #3c3222;
+  --color-danger: #ffa69b;
+  --color-danger-soft: #42292b;
+  --shadow-soft: 0 2px 12px #00000020;
+  --shadow-float: 0 12px 32px #00000045;
+}
+
+/* Texto de destaque e preenchimento sólido precisam de contrastes distintos. */
+.dark .bg-crimson { background-color: var(--color-crimson-fill); }
+.dark .hover\:bg-crimson-dark:hover { background-color: #892436; }
+.dark .bg-navy { background-color: var(--color-navy-fill); }
+.dark .hover\:bg-navy-dark:hover { background-color: #1e3050; }
+.dark .bg-ink\/40 { background-color: #00000080; }
+
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline-color: var(--color-crimson); }
+
+.auth-rule { background: var(--color-crimson-fill); width: 48px; height: 3px; }
+.brand-artwork { background: #fff; }
 
 body {
   font-family: var(--font-sans);

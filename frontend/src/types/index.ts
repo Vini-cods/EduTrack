@@ -92,6 +92,10 @@ export interface CalendarEvent extends CalendarEventBase {
 export interface CalendarEventWithSubject extends CalendarEvent {
   subject_name?: string | null;
   task_title?: string | null;
+  /** Metadados apenas da projeção visual: prazos continuam pertencendo a Task. */
+  source?: 'event' | 'task';
+  all_day?: boolean;
+  task_status?: TaskStatus;
 }
 
 export type StudySessionStatus = 'em_andamento' | 'pausada' | 'concluida';

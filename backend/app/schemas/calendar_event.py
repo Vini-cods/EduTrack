@@ -1,11 +1,26 @@
 """Schemas Pydantic para eventos de calendário."""
 
 from datetime import date, datetime
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from app.models.calendar_event import EventCategory
+
+EventTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+
+
+class CalendarEventValidationError(ValueError):
+    """Intervalo incompatível com o evento atual."""
+
+
+def validate_interval(start: datetime, end: Optional[datetime]) -> None:
+    if end is None:
+        return
+    if (start.utcoffset() is None) != (end.utcoffset() is None):
+        raise CalendarEventValidationError("Início e fim devem usar a mesma convenção de fuso horário")
+    if end < start:
+        raise CalendarEventValidationError("end_datetime não pode ser anterior a start_datetime")
 
 
 class RecurrenceInput(BaseModel):
@@ -35,13 +50,13 @@ class RecurrenceInput(BaseModel):
 
 
 class CalendarEventBase(BaseModel):
-    title: str
+    title: EventTitle
     description: Optional[str] = None
     category: EventCategory = EventCategory.EVENTO
-    subject_id: Optional[int] = None
+    subject_id: Optional[int] = Field(default=None, gt=0)
     # Preenchido quando este evento é a sessão agendada de um objetivo do
     # Study Planner (ver comentário em models/calendar_event.py).
-    task_id: Optional[int] = None
+    task_id: Optional[int] = Field(default=None, gt=0)
     location: Optional[str] = None
     color: Optional[str] = None
     start_datetime: datetime
@@ -51,8 +66,8 @@ class CalendarEventBase(BaseModel):
     @classmethod
     def end_after_start(cls, v: Optional[datetime], info):
         start = info.data.get("start_datetime")
-        if v is not None and start is not None and v < start:
-            raise ValueError("end_datetime não pode ser anterior a start_datetime")
+        if start is not None:
+            validate_interval(start, v)
         return v
 
 
@@ -67,15 +82,22 @@ class CalendarEventCreate(CalendarEventBase):
 
 
 class CalendarEventUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[EventTitle] = None
     description: Optional[str] = None
     category: Optional[EventCategory] = None
-    subject_id: Optional[int] = None
-    task_id: Optional[int] = None
+    subject_id: Optional[int] = Field(default=None, gt=0)
+    task_id: Optional[int] = Field(default=None, gt=0)
     location: Optional[str] = None
     color: Optional[str] = None
     start_datetime: Optional[datetime] = None
     end_datetime: Optional[datetime] = None
+
+    @field_validator("title", "category", "start_datetime")
+    @classmethod
+    def required_fields_cannot_be_null(cls, v):
+        if v is None:
+            raise ValueError("O campo não pode ser nulo")
+        return v
 
 
 class CalendarEventResponse(CalendarEventBase):

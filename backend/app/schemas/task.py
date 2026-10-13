@@ -1,7 +1,10 @@
-from pydantic import BaseModel, ConfigDict, field_validator
-from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from typing import Annotated, Optional
 from datetime import date, datetime
 from enum import Enum
+
+TaskTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+EstimatedHours = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
 class TaskStatus(str, Enum):
     PENDENTE = "pendente"
@@ -18,7 +21,7 @@ class TaskBase(BaseModel):
     """
     Base schema para Task (Tarefa).
     """
-    title: str
+    title: TaskTitle
     description: Optional[str] = None
     due_date: Optional[date] = None
     status: TaskStatus = TaskStatus.PENDENTE
@@ -28,14 +31,7 @@ class TaskBase(BaseModel):
     # é o Study Planner que dá destaque a este campo (ver seção "tempo
     # estimado" do briefing), mas o dado mora em Task para não duplicar
     # título/disciplina/prazo/status numa entidade separada.
-    estimated_hours: Optional[float] = None
-
-    @field_validator("estimated_hours")
-    @classmethod
-    def estimated_hours_must_be_positive(cls, v: Optional[float]) -> Optional[float]:
-        if v is not None and v <= 0:
-            raise ValueError("estimated_hours deve ser maior que zero")
-        return v
+    estimated_hours: Optional[EstimatedHours] = None
 
 class TaskCreate(TaskBase):
     """
@@ -47,18 +43,19 @@ class TaskUpdate(BaseModel):
     """
     Schema para atualização de Task.
     """
-    title: Optional[str] = None
+    title: Optional[TaskTitle] = None
+    subject_id: Optional[int] = Field(default=None, gt=0)
     description: Optional[str] = None
     due_date: Optional[date] = None
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
-    estimated_hours: Optional[float] = None
+    estimated_hours: Optional[EstimatedHours] = None
 
-    @field_validator("estimated_hours")
+    @field_validator("title", "subject_id", "status", "priority")
     @classmethod
-    def estimated_hours_must_be_positive(cls, v: Optional[float]) -> Optional[float]:
-        if v is not None and v <= 0:
-            raise ValueError("estimated_hours deve ser maior que zero")
+    def required_fields_cannot_be_null(cls, v):
+        if v is None:
+            raise ValueError("O campo não pode ser nulo")
         return v
 
 class TaskStatusUpdate(BaseModel):

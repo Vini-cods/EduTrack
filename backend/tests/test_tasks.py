@@ -118,3 +118,66 @@ def test_user_cannot_create_task_in_other_users_subject(client, auth_headers, su
     other_headers = make_auth_headers(client, "outro-task3@example.com")
     resp = client.post("/api/v1/tasks/", json={"title": "T", "subject_id": subject["id"]}, headers=other_headers)
     assert resp.status_code == 404
+
+
+def test_planner_task_rejects_blank_title_and_non_finite_estimates(client, auth_headers, subject):
+    for invalid in ({"title": "   "}, {"estimated_hours": "NaN"}, {"estimated_hours": "Infinity"}):
+        payload = {"title": "Revisar grafos", "subject_id": subject["id"], **invalid}
+        assert client.post("/api/v1/tasks/", json=payload, headers=auth_headers).status_code == 422
+    assert client.get("/api/v1/tasks/", headers=auth_headers).json() == []
+
+
+def test_task_partial_update_rejects_null_required_fields_and_keeps_data(client, auth_headers, subject):
+    task = client.post(
+        "/api/v1/tasks/",
+        json={"title": "  Revisar grafos  ", "subject_id": subject["id"], "estimated_hours": 2},
+        headers=auth_headers,
+    ).json()
+    assert task["title"] == "Revisar grafos"
+    for invalid in ({"title": None}, {"subject_id": None}, {"status": None}, {"priority": None}, {"estimated_hours": "NaN"}):
+        assert client.put(f"/api/v1/tasks/{task['id']}", json=invalid, headers=auth_headers).status_code == 422
+    saved = client.get(f"/api/v1/tasks/{task['id']}", headers=auth_headers).json()
+    assert saved["title"] == task["title"]
+    assert saved["estimated_hours"] == 2
+    # Limpar dados opcionais continua sendo uma atualização válida.
+    cleared = client.put(
+        f"/api/v1/tasks/{task['id']}", json={"estimated_hours": None, "due_date": None}, headers=auth_headers
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["estimated_hours"] is None
+
+
+def test_moving_task_updates_planning_but_preserves_execution_context(client, auth_headers, subject):
+    other_subject = client.post("/api/v1/subjects/", json={"name": "Redes"}, headers=auth_headers).json()
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar", "subject_id": subject["id"]}, headers=auth_headers).json()
+    client.post(
+        "/api/v1/calendar-events/",
+        json={"title": task["title"], "category": "estudo", "task_id": task["id"], "start_datetime": "2026-10-12T10:00:00"},
+        headers=auth_headers,
+    )
+    session = client.post("/api/v1/study-sessions/", json={"task_id": task["id"]}, headers=auth_headers).json()
+    client.patch(f"/api/v1/study-sessions/{session['id']}/stop", json={}, headers=auth_headers)
+
+    moved = client.put(f"/api/v1/tasks/{task['id']}", json={"subject_id": other_subject["id"]}, headers=auth_headers)
+    assert moved.status_code == 200
+    assert moved.json()["subject_id"] == other_subject["id"]
+    events = client.get("/api/v1/calendar-events/", headers=auth_headers).json()
+    assert events[0]["subject_id"] == other_subject["id"]
+    assert events[0]["subject_name"] == other_subject["name"]
+    history = client.get("/api/v1/study-sessions/", headers=auth_headers).json()
+    assert history[0]["subject_id"] == subject["id"]
+    assert history[0]["subject_name"] == subject["name"]
+    next_session = client.post("/api/v1/study-sessions/", json={"task_id": task["id"]}, headers=auth_headers)
+    assert next_session.status_code == 201
+    assert next_session.json()["subject_id"] == other_subject["id"]
+
+
+def test_cannot_move_task_into_another_users_subject(client, auth_headers, subject):
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar", "subject_id": subject["id"]}, headers=auth_headers).json()
+    other_headers = make_auth_headers(client, "task-move-outsider@example.com")
+    other_subject = client.post("/api/v1/subjects/", json={"name": "Privada"}, headers=other_headers).json()
+    invalid = client.put(f"/api/v1/tasks/{task['id']}", json={"subject_id": other_subject["id"], "title": "Não salvar"}, headers=auth_headers)
+    assert invalid.status_code == 404
+    saved = client.get(f"/api/v1/tasks/{task['id']}", headers=auth_headers).json()
+    assert saved["subject_id"] == subject["id"]
+    assert saved["title"] == task["title"]

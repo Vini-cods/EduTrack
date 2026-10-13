@@ -50,3 +50,4 @@ class Task(Base):
     # (coerente com o ondelete="SET NULL" da FK em CalendarEvent.task_id).
     calendar_events = relationship("CalendarEvent", back_populates="task")
     study_sessions = relationship("StudySession", back_populates="task")
+    notes = relationship("Note", back_populates="task")

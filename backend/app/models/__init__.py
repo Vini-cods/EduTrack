@@ -6,6 +6,7 @@ from app.models.task import Task
 from app.models.calendar_event import CalendarEvent, EventCategory
 from app.models.study_session import StudySession, StudySessionStatus
 from app.models.material import Material, MaterialCategory, MaterialStatus
+from app.models.note import Note
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "Material",
     "MaterialCategory",
     "MaterialStatus",
+    "Note",
 ]

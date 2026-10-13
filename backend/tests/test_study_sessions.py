@@ -4,6 +4,7 @@ tempo real decorrido, conflito de sessão dupla, cascatas e isolamento.
 """
 
 import time
+from datetime import datetime, timedelta
 
 from tests.conftest import make_auth_headers
 
@@ -20,6 +21,9 @@ def test_start_session(client, auth_headers, subject):
     body = resp.json()
     assert body["status"] == "em_andamento"
     assert body["elapsed_seconds"] == 0
+    assert datetime.fromisoformat(body["started_at"]).utcoffset() == timedelta(0)
+    active = client.get("/api/v1/study-sessions/active", headers=auth_headers).json()
+    assert datetime.fromisoformat(active["started_at"]).utcoffset() == timedelta(0)
 
 
 def test_cannot_start_second_session_while_one_active(client, auth_headers):
@@ -156,3 +160,63 @@ def test_user_cannot_control_other_users_session(client, auth_headers):
 
     # limpa a sessão do usuário original para não vazar entre testes
     client.patch(f"/api/v1/study-sessions/{session['id']}/stop", json={"pomodoro_cycles_completed": 0}, headers=auth_headers)
+
+
+def test_task_only_session_derives_subject_and_does_not_complete_task(client, auth_headers, subject):
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar grafos", "subject_id": subject["id"]}, headers=auth_headers).json()
+    started = client.post("/api/v1/study-sessions/", json={"task_id": task["id"]}, headers=auth_headers)
+    assert started.status_code == 201
+    assert started.json()["subject_id"] == subject["id"]
+    active = client.get("/api/v1/study-sessions/active", headers=auth_headers).json()
+    assert active["subject_name"] == subject["name"]
+    client.patch(f"/api/v1/study-sessions/{started.json()['id']}/stop", json={}, headers=auth_headers)
+    # Encerrar uma execução não significa terminar o objetivo acadêmico.
+    assert client.get(f"/api/v1/tasks/{task['id']}", headers=auth_headers).json()["status"] == "pendente"
+
+
+def test_session_rejects_mismatched_context_without_creating_execution(client, auth_headers, subject):
+    other_subject = client.post("/api/v1/subjects/", json={"name": "Redes"}, headers=auth_headers).json()
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar grafos", "subject_id": subject["id"]}, headers=auth_headers).json()
+    invalid = client.post(
+        "/api/v1/study-sessions/", json={"task_id": task["id"], "subject_id": other_subject["id"]}, headers=auth_headers
+    )
+    assert invalid.status_code == 422
+    assert client.get("/api/v1/study-sessions/active", headers=auth_headers).json() is None
+
+
+def test_paused_execution_blocks_new_session_until_stopped(client, auth_headers):
+    session = client.post("/api/v1/study-sessions/", json={}, headers=auth_headers).json()
+    client.patch(f"/api/v1/study-sessions/{session['id']}/pause", headers=auth_headers)
+    assert client.post("/api/v1/study-sessions/", json={}, headers=auth_headers).status_code == 409
+    stopped = client.patch(f"/api/v1/study-sessions/{session['id']}/stop", json={}, headers=auth_headers)
+    assert stopped.status_code == 200
+    assert stopped.json()["status"] == "concluida"
+    assert client.post("/api/v1/study-sessions/", json={}, headers=auth_headers).status_code == 201
+
+
+def test_stale_active_session_check_still_returns_conflict_and_rolls_back(client, auth_headers, monkeypatch):
+    """Simula duas abas que passaram pela checagem antes de uma delas confirmar."""
+    from app.services import study_session_service
+
+    first = client.post("/api/v1/study-sessions/", json={}, headers=auth_headers).json()
+    real_get_active = study_session_service.get_active_session
+    checks = 0
+
+    def stale_first_check(db, user_id):
+        nonlocal checks
+        checks += 1
+        return None if checks == 1 else real_get_active(db, user_id)
+
+    monkeypatch.setattr(study_session_service, "get_active_session", stale_first_check)
+    second = client.post("/api/v1/study-sessions/", json={}, headers=auth_headers)
+    assert second.status_code == 409
+    assert len(client.get("/api/v1/study-sessions/", headers=auth_headers).json()) == 1
+    assert client.patch(f"/api/v1/study-sessions/{first['id']}/stop", json={}, headers=auth_headers).status_code == 200
+
+
+def test_user_cannot_start_execution_with_another_users_context(client, auth_headers, subject):
+    task = client.post("/api/v1/tasks/", json={"title": "Revisar grafos", "subject_id": subject["id"]}, headers=auth_headers).json()
+    other_headers = make_auth_headers(client, "execution-outsider@example.com")
+    for context in ({"subject_id": subject["id"]}, {"task_id": task["id"]}):
+        assert client.post("/api/v1/study-sessions/", json=context, headers=other_headers).status_code == 404
+    assert client.get("/api/v1/study-sessions/", headers=other_headers).json() == []

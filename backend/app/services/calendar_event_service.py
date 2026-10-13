@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.models.calendar_event import CalendarEvent
 from app.models.subject import Subject
@@ -13,8 +14,11 @@ from app.schemas.calendar_event import (
     CalendarEventCreate,
     CalendarEventUpdate,
     CalendarEventWithSubject,
+    CalendarEventValidationError,
     RecurrenceInput,
+    validate_interval,
 )
+from app.services.academic_context import AcademicContextNotFoundError, resolve_subject_id
 
 # Limite de ocorrências geradas por série recorrente. Evita que um `until`
 # muito distante (ex.: daqui a 10 anos) crie milhares de linhas de uma vez.
@@ -78,10 +82,9 @@ def get_events_for_user(
     pelas visões de mês/semana/dia, que só precisam carregar o período
     visível em vez de todos os eventos do usuário.
 
-    Simplificação consciente: filtra pelo início do evento cair dentro do
-    intervalo, sem tratar o caso raro de um evento atravessar a fronteira
-    (ex.: começar às 23h de um dia e passar da meia-noite). Para eventos
-    acadêmicos (aula, prova, sessão de estudo) isso não acontece na prática.
+    Inclui qualquer sobreposição com o intervalo, inclusive blocos que
+    começam no dia anterior e atravessam a meia-noite. Eventos sem fim
+    são tratados como um instante no horário de início.
     """
     query = (
         db.query(CalendarEvent, Subject.name, Task.title)
@@ -90,7 +93,7 @@ def get_events_for_user(
         .filter(CalendarEvent.user_id == user_id)
     )
     if start is not None:
-        query = query.filter(CalendarEvent.start_datetime >= start)
+        query = query.filter(func.coalesce(CalendarEvent.end_datetime, CalendarEvent.start_datetime) >= start)
     if end is not None:
         query = query.filter(CalendarEvent.start_datetime <= end)
 
@@ -102,14 +105,6 @@ def get_event_by_id(db: Session, event_id: int, user_id: int) -> Optional[Calend
     return db.query(CalendarEvent).filter(CalendarEvent.id == event_id, CalendarEvent.user_id == user_id).first()
 
 
-def _validate_task_ownership(db: Session, task_id: int, user_id: int) -> bool:
-    """
-    A FK de Task não é direta por Subject (Task já tem user_id próprio), então
-    a checagem aqui é direta — mais simples que a validação de subject_id.
-    """
-    return db.query(Task).filter(Task.id == task_id, Task.user_id == user_id).first() is not None
-
-
 def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Optional[List[CalendarEvent]]:
     """
     Cria um evento único ou, se `recurrence` vier preenchido, a série inteira
@@ -117,17 +112,14 @@ def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Op
     informados mas não pertencem ao usuário (mesma validação de ownership
     usada em tasks).
     """
-    if payload.subject_id is not None:
-        subject = db.query(Subject).filter(Subject.id == payload.subject_id, Subject.user_id == user_id).first()
-        if not subject:
-            return None
-
-    if payload.task_id is not None and not _validate_task_ownership(db, payload.task_id, user_id):
+    try:
+        subject_id = resolve_subject_id(db, user_id, payload.subject_id, payload.task_id)
+    except AcademicContextNotFoundError:
         return None
 
     common = dict(
         user_id=user_id,
-        subject_id=payload.subject_id,
+        subject_id=subject_id,
         task_id=payload.task_id,
         title=payload.title,
         description=payload.description,
@@ -149,6 +141,8 @@ def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Op
         return [db_event]
 
     occurrences = expand_recurrence(payload.start_datetime, payload.end_datetime, payload.recurrence)
+    if not occurrences:
+        raise CalendarEventValidationError("A recorrência não contém nenhuma ocorrência no intervalo selecionado")
     group_id = uuid.uuid4().hex
     db_events = [
         CalendarEvent(**common, start_datetime=occ_start, end_datetime=occ_end, recurrence_group_id=group_id)
@@ -169,16 +163,24 @@ def update_event(db: Session, event_id: int, update: CalendarEventUpdate, user_i
 
     update_data = update.model_dump(exclude_unset=True)
 
-    new_subject_id = update_data.get("subject_id")
-    if "subject_id" in update_data and new_subject_id is not None:
-        subject = db.query(Subject).filter(Subject.id == new_subject_id, Subject.user_id == user_id).first()
-        if not subject:
-            return None
-
-    new_task_id = update_data.get("task_id")
+    new_task_id = update_data.get("task_id", db_event.task_id)
+    # Ao trocar somente a tarefa, derive a disciplina da nova seleção.
+    # Ao manter a tarefa, valide também a disciplina já persistida.
+    default_subject_id = db_event.subject_id
     if "task_id" in update_data and new_task_id is not None:
-        if not _validate_task_ownership(db, new_task_id, user_id):
-            return None
+        default_subject_id = None
+    new_subject_id = update_data.get("subject_id", default_subject_id)
+    try:
+        resolved_subject_id = resolve_subject_id(db, user_id, new_subject_id, new_task_id)
+    except AcademicContextNotFoundError:
+        return None
+    if new_task_id is not None or "subject_id" in update_data:
+        update_data["subject_id"] = resolved_subject_id
+
+    validate_interval(
+        update_data.get("start_datetime", db_event.start_datetime),
+        update_data.get("end_datetime", db_event.end_datetime),
+    )
 
     for key, value in update_data.items():
         setattr(db_event, key, value)

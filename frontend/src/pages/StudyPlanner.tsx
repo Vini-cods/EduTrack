@@ -1,500 +1,161 @@
 /**
- * Study Planner — PLANEJAMENTO, não execução.
- *
- * Um "objetivo de estudo" aqui é uma Task com `estimated_hours` preenchido —
- * não uma entidade própria. Isso evita duplicar título/disciplina/prazo/
- * status numa tabela separada (Task já resolve isso).
- *
- * Importante: esta página representa INTENÇÃO (o que planejo estudar, com
- * que prioridade e em quanto tempo) — não EXECUÇÃO (quanto tempo eu de fato
- * estudei). Agendar uma sessão aqui cria um CalendarEvent(categoria=estudo)
- * vinculado à tarefa via `task_id`, mas isso ainda é planejamento ("quando
- * pretendo estudar"), não um registro de tempo efetivamente estudado.
- *
- * Essa segunda parte (execução real, cronômetro, histórico de sessões)
- * pertence a uma futura entidade `StudySession`, ligada ao Focus/Pomodoro —
- * que ainda não existe. Não introduza aqui nenhum campo de "tempo
- * efetivamente gasto"; isso pertenceria a StudySession, não a Task/CalendarEvent.
+ * Planejamento reutiliza Task e blocos CalendarEvent; execução vem de StudySession.
+ * Nenhuma ação de agenda altera automaticamente conclusão ou tempo estudado.
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Target, Plus, CalendarPlus, CalendarCheck, Circle, CheckCircle2, Trash2, Timer } from 'lucide-react';
-import apiClient from '../api/client';
-import type { TaskWithSubject, Subject, TaskPriority, CalendarEventWithSubject } from '../types';
+import { Plus, RefreshCw, Target, Timer } from 'lucide-react';
+import { deleteGoal, setGoalStatus } from '../api/studyPlanner';
+import { useStudyPlanner } from '../hooks/useStudyPlanner';
+import type { GoalFilter, GoalSort } from '../lib/studyPlanner';
+import { filterStudyGoals, formatStudyDuration, isStudyGoal, studyWeekSummary, upcomingStudyBlocks } from '../lib/studyPlanner';
+import { toDatetimeLocalValue } from '../lib/calendar';
+import type { Task, TaskWithSubject } from '../types';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Skeleton } from '../components/ui/Skeleton';
-import { PRIORITY_META, PRIORITY_ORDER } from '../lib/tasks';
-import { formatShortDate, isThisWeek } from '../lib/date';
-import { toDatetimeLocalValue } from '../lib/calendar';
+import { TaskFormModal } from '../components/tasks/TaskFormModal';
+import { ScheduleStudyModal } from '../components/study/ScheduleStudyModal';
+import { StudyGoalRow } from '../components/study/StudyGoalRow';
 
-interface GoalFormValues {
-  title: string;
-  subject_id: string;
-  description: string;
-  estimated_hours: string;
-  due_date: string;
-  priority: TaskPriority;
-}
-
-const priorityDotColor: Record<TaskPriority, string> = {
-  urgente: 'var(--color-crimson)',
-  alta: 'var(--color-warning)',
-  media: 'var(--color-navy)',
-  baixa: 'var(--color-muted)',
-};
+const FILTERS: { value: GoalFilter; label: string }[] = [
+  { value: 'active', label: 'Em aberto' }, { value: 'week', label: 'Prazo nesta semana' },
+  { value: 'overdue', label: 'Atrasados' }, { value: 'unscheduled', label: 'Sem próximo bloco' },
+  { value: 'completed', label: 'Concluídos' }, { value: 'all', label: 'Todos' },
+];
+const selectClass = 'min-h-11 px-3 py-2 rounded-lg border border-border bg-surface text-sm text-ink focus:outline-none focus:ring-2 focus:ring-crimson/30';
 
 export const StudyPlanner: React.FC = () => {
-  const navigate = useNavigate();
+  const { data, loading, error, reload } = useStudyPlanner();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tasks, setTasks] = useState<TaskWithSubject[] | null>(null);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [events, setEvents] = useState<CalendarEventWithSubject[]>([]);
+  const [now, setNow] = useState(() => new Date());
+  const [filter, setFilter] = useState<GoalFilter>('active');
+  const [subjectId, setSubjectId] = useState('');
+  const [sort, setSort] = useState<GoalSort>('priority');
   const [goalModalOpen, setGoalModalOpen] = useState(false);
-  const [scheduleTarget, setScheduleTarget] = useState<TaskWithSubject | null>(null);
-
-  const loadAll = () => {
-    apiClient.get('/tasks/').then((res) => setTasks(res.data)).catch(console.error);
-    apiClient.get('/calendar-events/').then((res) => setEvents(res.data)).catch(console.error);
-  };
+  const [editTarget, setEditTarget] = useState<Task | null>(null);
+  const [scheduleTarget, setScheduleTarget] = useState<Task | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TaskWithSubject | null>(null);
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+  const mutationLock = useRef(new Set<number>());
 
   useEffect(() => {
-    loadAll();
-    apiClient.get('/subjects/').then((res) => setSubjects(res.data)).catch(console.error);
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
-  // "Novo objetivo de estudo" vindo do Command Palette (?new=1)
   useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      setGoalModalOpen(true);
-      const next = new URLSearchParams(searchParams);
-      next.delete('new');
-      setSearchParams(next, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (searchParams.get('new') !== '1') return;
+    setEditTarget(null);
+    setGoalModalOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
-  const onToggleComplete = async (task: TaskWithSubject) => {
-    const nextStatus = task.status === 'concluida' ? 'pendente' : 'concluida';
-    setTasks((prev) => prev?.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t)) ?? null);
+  const goals = useMemo(() => data ? filterStudyGoals(data.tasks, data.events, filter, subjectId, sort, now) : [], [data, filter, subjectId, sort, now]);
+  const blocks = useMemo(() => upcomingStudyBlocks(data?.events || [], now), [data, now]);
+  const summary = useMemo(() => data ? studyWeekSummary(data.tasks, data.events, data.sessions, now) : null, [data, now]);
+  const hasGoals = data?.tasks.some(isStudyGoal);
+
+  const mutate = async (task: TaskWithSubject, action: 'complete' | 'delete') => {
+    if (mutationLock.current.has(task.id)) return;
+    mutationLock.current.add(task.id);
+    setBusyIds(new Set(mutationLock.current));
     try {
-      await apiClient.patch(`/tasks/${task.id}/status`, { status: nextStatus });
-      if (nextStatus === 'concluida') toast.success('Objetivo concluído!');
-    } catch {
-      toast.error('Não foi possível atualizar.');
-      loadAll();
+      if (action === 'delete') {
+        await deleteGoal(task.id);
+        setDeleteTarget(null);
+        toast.success('Objetivo excluído.');
+      } else {
+        await setGoalStatus(task.id, task.status === 'concluida' ? 'pendente' : 'concluida');
+        toast.success(task.status === 'concluida' ? 'Objetivo reaberto.' : 'Objetivo concluído.');
+      }
+      await reload();
+    } catch { toast.error('Não foi possível atualizar o objetivo. Tente novamente.'); }
+    finally {
+      mutationLock.current.delete(task.id);
+      setBusyIds(new Set(mutationLock.current));
     }
   };
 
-  const onDelete = async (taskId: number) => {
-    if (!window.confirm('Excluir este objetivo de estudo?')) return;
-    try {
-      await apiClient.delete(`/tasks/${taskId}`);
-      toast.success('Objetivo excluído.');
-      loadAll();
-    } catch {
-      toast.error('Não foi possível excluir.');
-    }
-  };
-
-  const studyTasks = useMemo(() => (tasks ?? []).filter((t) => t.estimated_hours != null), [tasks]);
-
-  const eventByTaskId = useMemo(() => {
-    const map = new Map<number, CalendarEventWithSubject>();
-    events.forEach((e) => {
-      if (e.task_id) map.set(e.task_id, e);
-    });
-    return map;
-  }, [events]);
-
-  const grouped = useMemo(
-    () =>
-      PRIORITY_ORDER.map((priority) => ({
-        priority,
-        items: studyTasks
-          .filter((t) => t.priority === priority)
-          .sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999')),
-      })).filter((g) => g.items.length > 0),
-    [studyTasks]
-  );
-
-  const weekSummary = useMemo(() => {
-    const pending = studyTasks.filter((t) => t.status !== 'concluida' && isThisWeek(t.due_date));
-    const totalHours = pending.reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
-    return { count: pending.length, totalHours };
-  }, [studyTasks]);
-
-  const loading = tasks === null;
+  const closeGoal = () => { setGoalModalOpen(false); setEditTarget(null); };
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto">
-      <SectionHeader
-        title="Study Planner"
-        description="Planeje o que estudar, com prioridade e tempo estimado — não apenas o que entregar."
-        action={
-          <div className="flex gap-2">
-            <Button variant="outline" icon={<Timer size={16} />} onClick={() => navigate('/study/focus')}>
-              Iniciar foco
-            </Button>
-            <Button icon={<Plus size={16} />} onClick={() => setGoalModalOpen(true)}>
-              Novo objetivo
-            </Button>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+      <SectionHeader title="Study Planner" eyebrow="Organize seu próximo passo"
+        description="Defina o que estudar, reserve tempo na agenda e acompanhe o que realizou."
+        action={<div className="flex flex-wrap gap-2">
+          <Link to="/study/focus" className="inline-flex min-h-11 items-center gap-2 px-4 py-2 text-sm text-ink border border-border-strong rounded-lg hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-crimson"><Timer size={16} /> Iniciar foco</Link>
+          <Button icon={<Plus size={16} />} disabled={!data || loading || !!error} onClick={() => { setEditTarget(null); setGoalModalOpen(true); }}>Novo objetivo</Button>
+        </div>} />
+
+      {error && <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 p-4 border border-danger/30 rounded-lg bg-danger/5">
+        <p className="text-sm text-danger">{error}{data ? ' Os dados exibidos são da última atualização.' : ''}</p>
+        <Button variant="outline" icon={<RefreshCw size={15} />} loading={loading} onClick={() => void reload()}>Tentar novamente</Button>
+      </div>}
+
+      {!data && loading ? <Card className="mt-6" aria-label="Carregando planejamento" aria-busy="true">
+        <Skeleton className="h-6 w-40 mb-5" /><Skeleton className="h-24 w-full mb-4" /><Skeleton className="h-24 w-full" />
+      </Card> : data && <>
+        {summary && <Card variant="accent" className="mt-6 animate-fade-in-up">
+          <div className="flex flex-wrap justify-between gap-3">
+            <div><h2 className="font-serif text-xl font-semibold text-ink">Esta semana</h2>
+              <p className="text-sm text-graphite mt-1">{summary.count} {summary.count === 1 ? 'objetivo em aberto com prazo nesta semana' : 'objetivos em aberto com prazo nesta semana'}.</p></div>
+            <Button variant="ghost" icon={<RefreshCw size={15} />} loading={loading} onClick={() => void reload()}>Atualizar</Button>
           </div>
-        }
-      />
+          <dl className="grid sm:grid-cols-3 gap-5 mt-5 pt-5 border-t border-border">
+            <div><dt className="text-xs text-graphite">Estimativa dos objetivos em aberto</dt><dd className="font-serif text-2xl text-ink mt-1 tabular-nums">{formatStudyDuration(summary.estimatedSeconds)}</dd></div>
+            <div><dt className="text-xs text-graphite">Tempo reservado na agenda</dt><dd className="font-serif text-2xl text-navy mt-1 tabular-nums">{formatStudyDuration(summary.scheduledSeconds)}</dd></div>
+            <div><dt className="text-xs text-graphite">Tempo realizado em sessões concluídas</dt><dd className="font-serif text-2xl text-ink mt-1 tabular-nums">{formatStudyDuration(summary.studiedSeconds)}</dd></div>
+          </dl>
+          <p className="text-xs text-muted mt-4">Sessões concluídas são contabilizadas na semana em que começaram. Agendar tempo não conclui um objetivo.</p>
+        </Card>}
 
-      {!loading && studyTasks.length > 0 && (
-        <Card className="mt-6 animate-fade-in-up" variant="accent">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="font-serif text-lg font-semibold text-ink">Esta semana</h2>
-              <p className="text-sm text-graphite mt-0.5">
-                {weekSummary.count === 0
-                  ? 'Nenhum objetivo com prazo para esta semana.'
-                  : `${weekSummary.count} ${weekSummary.count === 1 ? 'objetivo' : 'objetivos'} pendente${
-                      weekSummary.count === 1 ? '' : 's'
-                    } com prazo esta semana.`}
-              </p>
-            </div>
-            {weekSummary.totalHours > 0 && (
-              <p className="font-serif text-3xl font-semibold text-ink tabular-nums text-right">
-                {weekSummary.totalHours}h
-                <span className="block text-xs font-sans font-normal text-graphite">planejadas</span>
-              </p>
-            )}
+        {blocks.length > 0 && <section className="mt-7" aria-labelledby="next-blocks-title">
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-3"><h2 id="next-blocks-title" className="font-serif text-lg font-semibold text-ink">Próximos blocos de estudo</h2><Link className="text-sm text-navy underline underline-offset-2 py-2" to="/calendar">Abrir calendário</Link></div>
+          <Card padding="none"><ul className="divide-y divide-border">{blocks.slice(0, 4).map((event) => <li key={event.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0"><p className="text-sm font-medium text-ink break-words">{event.title}</p><p className="text-xs text-graphite mt-1">
+              {new Date(event.start_datetime).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}{event.subject_name ? ' · ' + event.subject_name : ''}
+            </p></div>
+            <Link to={'/calendar?date=' + toDatetimeLocalValue(new Date(event.start_datetime)).slice(0, 10)} className="min-h-11 inline-flex items-center text-sm text-navy underline underline-offset-2">Ver na agenda</Link>
+          </li>)}</ul></Card>
+        </section>}
+
+        <section className="mt-7" aria-labelledby="goals-title" aria-busy={loading}>
+          <h2 id="goals-title" className="font-serif text-lg font-semibold text-ink mb-3">Objetivos de estudo</h2>
+          <div className="grid sm:grid-cols-3 gap-3 mb-4">
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-graphite">Exibir<select value={filter} onChange={(event) => setFilter(event.target.value as GoalFilter)} className={selectClass}>{FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-graphite">Disciplina<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)} className={selectClass}><option value="">Todas as disciplinas</option>{data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-graphite">Ordenar por<select value={sort} onChange={(event) => setSort(event.target.value as GoalSort)} className={selectClass}><option value="priority">Prioridade e prazo</option><option value="deadline">Prazo mais próximo</option></select></label>
           </div>
-        </Card>
-      )}
-
-      <div className="mt-6 space-y-6">
-        {loading ? (
-          <Card padding="lg">
-            <Skeleton className="h-5 w-32 mb-4" />
-            <Skeleton className="h-16 w-full mb-2" />
-            <Skeleton className="h-16 w-full" />
+          <p className="text-xs text-muted mb-3" role="status">{goals.length} {goals.length === 1 ? 'objetivo encontrado' : 'objetivos encontrados'}. Tarefas com estimativa também aparecem aqui.</p>
+          <Card padding="none">
+            {goals.length ? <ul className="divide-y divide-border">{goals.map((task) => <StudyGoalRow key={task.id} task={task} blocks={blocks.filter((event) => event.task_id === task.id)} busy={busyIds.has(task.id) || loading || !!error}
+              onComplete={() => void mutate(task, 'complete')} onEdit={() => { setEditTarget(task); setGoalModalOpen(true); }}
+              onSchedule={() => setScheduleTarget(task)} onDelete={() => setDeleteTarget(task)} />)}</ul>
+              : <div className="p-5 sm:p-8"><EmptyState icon={Target} title={hasGoals ? 'Nenhum objetivo neste filtro' : 'Seu próximo estudo começa aqui'}
+                description={hasGoals ? 'Ajuste os filtros ou crie um objetivo para o próximo conteúdo.' : 'Escolha uma disciplina, defina o conteúdo e estime o tempo. Depois, divida seu estudo em blocos na agenda.'}
+                action={{ label: hasGoals ? 'Limpar filtros' : 'Novo objetivo', icon: <Plus size={15} />, onClick: () => {
+                  if (hasGoals) { setFilter('all'); setSubjectId(''); } else setGoalModalOpen(true);
+                } }} /></div>}
           </Card>
-        ) : studyTasks.length === 0 ? (
-          <Card padding="lg">
-            <EmptyState
-              icon={Target}
-              title="Nenhum objetivo de estudo ainda"
-              description='Crie objetivos como "Estudar Árvores Binárias" com disciplina, prazo, prioridade e tempo estimado — diferente de uma tarefa genérica de entrega.'
-              action={{ label: 'Novo objetivo', icon: <Plus size={15} />, onClick: () => setGoalModalOpen(true) }}
-            />
-          </Card>
-        ) : (
-          grouped.map(({ priority, items }) => (
-            <div key={priority}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: priorityDotColor[priority] }} />
-                <h2 className="text-sm font-semibold text-graphite">
-                  Prioridade {PRIORITY_META[priority].label} · {items.length}
-                </h2>
-              </div>
-              <Card padding="none">
-                <div className="divide-y divide-border">
-                  {items.map((task) => {
-                    const linkedEvent = eventByTaskId.get(task.id);
-                    return (
-                      <div key={task.id} className="flex items-start gap-3 p-4">
-                        <button
-                          onClick={() => onToggleComplete(task)}
-                          className={`shrink-0 mt-0.5 transition-colors cursor-pointer ${
-                            task.status === 'concluida' ? 'text-success' : 'text-muted hover:text-success'
-                          }`}
-                          aria-label="Alternar conclusão"
-                        >
-                          {task.status === 'concluida' ? <CheckCircle2 size={19} /> : <Circle size={19} />}
-                        </button>
+        </section>
+      </>}
 
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={`text-sm font-medium ${
-                              task.status === 'concluida' ? 'line-through text-muted' : 'text-ink'
-                            }`}
-                          >
-                            {task.title}
-                          </p>
-                          {task.description && <p className="text-sm text-graphite mt-0.5">{task.description}</p>}
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted">
-                            <Badge tone="neutral" size="sm">
-                              {task.subject_name}
-                            </Badge>
-                            <span>{task.estimated_hours}h estimadas</span>
-                            {task.due_date && <span>Prazo: {formatShortDate(task.due_date)}</span>}
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 flex items-center gap-2">
-                          <button
-                            onClick={() => navigate(`/study/focus?task_id=${task.id}`)}
-                            className="text-xs font-medium text-crimson hover:text-crimson-dark inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <Timer size={13} />
-                            Focar
-                          </button>
-                          {linkedEvent ? (
-                            <Link
-                              to={`/calendar?date=${linkedEvent.start_datetime.slice(0, 10)}`}
-                              className="text-xs font-medium text-navy hover:text-navy-dark inline-flex items-center gap-1"
-                            >
-                              <CalendarCheck size={13} />
-                              {formatShortDate(linkedEvent.start_datetime.slice(0, 10))}
-                            </Link>
-                          ) : (
-                            <button
-                              onClick={() => setScheduleTarget(task)}
-                              className="text-xs font-medium text-graphite hover:text-ink inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <CalendarPlus size={13} />
-                              Agendar
-                            </button>
-                          )}
-                          <button
-                            onClick={() => onDelete(task.id)}
-                            className="text-muted hover:text-danger transition-colors cursor-pointer"
-                            aria-label="Excluir"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            </div>
-          ))
-        )}
-      </div>
-
-      <GoalModal
-        open={goalModalOpen}
-        onClose={() => setGoalModalOpen(false)}
-        subjects={subjects}
-        onCreated={(task) => {
-          setGoalModalOpen(false);
-          loadAll();
-          setScheduleTarget(task);
-        }}
-      />
-
-      <ScheduleModal task={scheduleTarget} onClose={() => setScheduleTarget(null)} onScheduled={loadAll} />
+      {data && (data.subjects.length === 0 && goalModalOpen ? <Modal open onClose={closeGoal} ariaLabel="Cadastre uma disciplina" panelClassName="max-w-md">
+        <div className="p-6"><h2 className="font-serif text-xl text-ink">Comece pela disciplina</h2><p className="text-sm text-graphite my-4">Todo objetivo pertence a uma disciplina. Cadastre a primeira para organizar seus estudos.</p><div className="flex flex-wrap gap-3"><Link className="inline-flex min-h-11 items-center text-crimson underline" to="/subjects?new=1">Criar disciplina</Link><Button variant="ghost" onClick={closeGoal}>Fechar</Button></div></div>
+      </Modal> : <TaskFormModal open={goalModalOpen} task={editTarget} studyGoal subjects={data.subjects} onClose={closeGoal}
+        onCreated={(task) => setScheduleTarget(task)} onSaved={() => { closeGoal(); void reload(); }} />)}
+      <ScheduleStudyModal task={scheduleTarget} events={data?.events || []} ready={!!data && !loading && !error} onClose={() => setScheduleTarget(null)} onScheduled={() => void reload()} />
+      <Modal open={!!deleteTarget} onClose={() => { if (!deleteTarget || !busyIds.has(deleteTarget.id)) setDeleteTarget(null); }} ariaLabel="Excluir objetivo de estudo" panelClassName="max-w-md">
+        <div className="p-6"><h2 className="font-serif text-xl font-semibold text-ink">Excluir objetivo?</h2><p className="text-sm text-graphite mt-3 break-words">{deleteTarget?.title}</p>
+          <div className="flex justify-end gap-2 mt-6"><Button variant="ghost" disabled={!!deleteTarget && busyIds.has(deleteTarget.id)} onClick={() => setDeleteTarget(null)}>Cancelar</Button><Button variant="danger" loading={!!deleteTarget && busyIds.has(deleteTarget.id)} onClick={() => { if (deleteTarget) void mutate(deleteTarget, 'delete'); }}>Excluir objetivo</Button></div></div>
+      </Modal>
     </div>
-  );
-};
-
-// --- Sub-componentes (específicos desta página, não reutilizados em outro lugar) ---
-
-const GoalModal: React.FC<{
-  open: boolean;
-  onClose: () => void;
-  subjects: Subject[];
-  onCreated: (task: TaskWithSubject) => void;
-}> = ({ open, onClose, subjects, onCreated }) => {
-  const { register, handleSubmit, reset } = useForm<GoalFormValues>();
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (open) reset({ title: '', subject_id: '', description: '', estimated_hours: '', due_date: '', priority: 'media' });
-  }, [open, reset]);
-
-  const onSubmit = handleSubmit(async (values) => {
-    setSaving(true);
-    try {
-      const res = await apiClient.post('/tasks/', {
-        title: values.title,
-        subject_id: Number(values.subject_id),
-        description: values.description || null,
-        due_date: values.due_date || null,
-        priority: values.priority,
-        estimated_hours: values.estimated_hours ? Number(values.estimated_hours) : null,
-      });
-      toast.success('Objetivo de estudo criado.');
-      onCreated(res.data);
-    } catch {
-      toast.error('Não foi possível criar o objetivo.');
-    } finally {
-      setSaving(false);
-    }
-  });
-
-  return (
-    <Modal open={open} onClose={onClose} ariaLabel="Novo objetivo de estudo" panelClassName="max-w-lg">
-      <form onSubmit={onSubmit} className="p-6">
-        <h2 className="font-serif text-xl font-semibold text-ink mb-5">Novo objetivo de estudo</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Objetivo</label>
-            <input
-              {...register('title', { required: true })}
-              placeholder='Ex.: "Estudar Estruturas de Dados"'
-              className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Disciplina</label>
-              <select
-                {...register('subject_id', { required: true })}
-                defaultValue=""
-                className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
-              >
-                <option value="" disabled>
-                  Selecione...
-                </option>
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Prioridade</label>
-              <select
-                {...register('priority')}
-                className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
-              >
-                {PRIORITY_ORDER.slice()
-                  .reverse()
-                  .map((p) => (
-                    <option key={p} value={p}>
-                      {PRIORITY_META[p].label}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Conteúdo (opcional)</label>
-            <input
-              {...register('description')}
-              placeholder="Ex.: Árvores Binárias"
-              className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Tempo estimado (h)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0.5"
-                {...register('estimated_hours', { required: true })}
-                placeholder="2"
-                className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Prazo</label>
-              <input
-                type="date"
-                {...register('due_date')}
-                className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2.5 mt-6 pt-5 border-t border-border">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" loading={saving}>
-            Criar objetivo
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-};
-
-const ScheduleModal: React.FC<{
-  task: TaskWithSubject | null;
-  onClose: () => void;
-  onScheduled: () => void;
-}> = ({ task, onClose, onScheduled }) => {
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('19:00');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (task) {
-      setDate(task.due_date || toDatetimeLocalValue(new Date()).slice(0, 10));
-      setTime('19:00');
-    }
-  }, [task]);
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!task || !date) return;
-    setSaving(true);
-    const start = new Date(`${date}T${time}`);
-    const end = new Date(start.getTime() + (task.estimated_hours || 1) * 60 * 60 * 1000);
-    try {
-      await apiClient.post('/calendar-events/', {
-        title: task.title,
-        category: 'estudo',
-        subject_id: task.subject_id,
-        task_id: task.id,
-        start_datetime: toDatetimeLocalValue(start),
-        end_datetime: toDatetimeLocalValue(end),
-      });
-      toast.success('Sessão agendada no calendário.');
-      onScheduled();
-      onClose();
-    } catch {
-      toast.error('Não foi possível agendar a sessão.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal open={!!task} onClose={onClose} ariaLabel="Agendar sessão de estudo" panelClassName="max-w-sm">
-      <form onSubmit={onSubmit} className="p-6">
-        <h2 className="font-serif text-lg font-semibold text-ink mb-1">Agendar sessão</h2>
-        <p className="text-sm text-graphite mb-5">
-          Quando você vai estudar &quot;<span className="text-ink font-medium">{task?.title}</span>&quot;?
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Data</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Horário</label>
-            <input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              required
-              className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-            />
-          </div>
-        </div>
-        <p className="text-xs text-muted mt-2">Duração de {task?.estimated_hours || 1}h, a partir do horário escolhido.</p>
-        <div className="flex justify-end gap-2.5 mt-6 pt-5 border-t border-border">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Pular
-          </Button>
-          <Button type="submit" loading={saving}>
-            Agendar
-          </Button>
-        </div>
-      </form>
-    </Modal>
   );
 };

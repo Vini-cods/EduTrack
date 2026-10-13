@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -46,6 +46,7 @@ export const EventModal: React.FC<EventModalProps> = ({
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [until, setUntil] = useState('');
   const [saving, setSaving] = useState(false);
+  const mutationInFlight = useRef(false);
   const [confirmingDelete, setConfirmingDelete] = useState<'single' | 'series' | null>(null);
 
   const { register, handleSubmit, reset } = useForm<FormValues>();
@@ -88,6 +89,11 @@ export const EventModal: React.FC<EventModalProps> = ({
   };
 
   const onSubmit = handleSubmit(async (values) => {
+    if (mutationInFlight.current) return;
+    if (!values.title.trim()) { toast.error('Informe um título para o evento.'); return; }
+    if (values.end && new Date(values.end) <= new Date(values.start)) {
+      toast.error('O fim precisa ser depois do início.'); return;
+    }
     if (isRecurring && recurrenceType === 'weekly' && selectedDays.length === 0) {
       toast.error('Selecione ao menos um dia da semana para a recorrência.');
       return;
@@ -97,10 +103,11 @@ export const EventModal: React.FC<EventModalProps> = ({
       return;
     }
 
+    mutationInFlight.current = true;
     setSaving(true);
     try {
       const payload = {
-        title: values.title,
+        title: values.title.trim(),
         category: values.category,
         subject_id: values.subject_id ? Number(values.subject_id) : null,
         location: values.location || null,
@@ -125,12 +132,15 @@ export const EventModal: React.FC<EventModalProps> = ({
       console.error(err);
       toast.error('Não foi possível salvar o evento.');
     } finally {
+      mutationInFlight.current = false;
       setSaving(false);
     }
   });
 
   const handleDelete = async (scope: 'single' | 'series') => {
-    if (!event) return;
+    if (!event || mutationInFlight.current) return;
+    mutationInFlight.current = true;
+    setSaving(true);
     try {
       if (scope === 'series' && event.recurrence_group_id) {
         await apiClient.delete(`/calendar-events/series/${event.recurrence_group_id}`);
@@ -143,15 +153,18 @@ export const EventModal: React.FC<EventModalProps> = ({
     } catch (err) {
       console.error(err);
       toast.error('Não foi possível excluir.');
+    } finally {
+      mutationInFlight.current = false;
+      setSaving(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} ariaLabel={isEditing ? 'Editar evento' : 'Novo evento'} panelClassName="max-w-lg">
+    <Modal open={open} onClose={() => { if (!saving) onClose(); }} ariaLabel={isEditing ? 'Editar evento' : 'Novo evento'} panelClassName="max-w-lg">
       <form onSubmit={onSubmit} className="p-6">
         <h2 className="font-serif text-xl font-semibold text-ink mb-5">{isEditing ? 'Editar evento' : 'Novo evento'}</h2>
 
-        <div className="space-y-4">
+        <fieldset disabled={saving} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-graphite mb-1.5">Título</label>
             <input
@@ -308,17 +321,18 @@ export const EventModal: React.FC<EventModalProps> = ({
               <Repeat size={12} /> Parte de uma série recorrente.
             </p>
           )}
-        </div>
+        </fieldset>
 
-        <div className="flex items-center justify-between mt-6 pt-5 border-t border-border">
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-6 pt-5 border-t border-border">
           <div>
             {isEditing &&
               (confirmingDelete ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-graphite">Confirmar exclusão?</span>
+                <div className="flex flex-wrap items-center gap-2" role="alert">
+                  <span className="text-xs text-graphite">{confirmingDelete === 'series' ? 'Excluir todas as ocorrências desta série, incluindo passadas?' : 'Excluir apenas este evento?'} Esta ação não pode ser desfeita.</span>
                   <button
                     type="button"
                     onClick={() => handleDelete(confirmingDelete)}
+                    disabled={saving}
                     className="text-xs font-medium text-danger hover:text-danger/80 cursor-pointer"
                   >
                     Sim, excluir
@@ -326,6 +340,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setConfirmingDelete(null)}
+                    disabled={saving}
                     className="text-xs text-muted hover:text-graphite cursor-pointer"
                   >
                     Cancelar
@@ -359,7 +374,7 @@ export const EventModal: React.FC<EventModalProps> = ({
               ))}
           </div>
           <div className="flex gap-2.5">
-            <Button type="button" variant="ghost" onClick={onClose}>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>
             <Button type="submit" loading={saving}>
