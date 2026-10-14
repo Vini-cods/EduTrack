@@ -25,7 +25,7 @@ export function StudyTrendChart({ days }: { days: AnalyticsDay[] }) {
         </BarChart>
       </ResponsiveContainer>
     </div>
-    <div className="flex flex-wrap items-center gap-5 text-xs text-graphite mt-3"><span className="flex items-center gap-2"><i className="h-2.5 w-2.5 bg-navy rounded-sm" />Agendado no calendário</span><span className="flex items-center gap-2"><i className="h-2.5 w-2.5 bg-crimson rounded-sm" />Realizado no Focus</span></div>
+    <div className="flex flex-wrap items-center gap-5 text-xs text-graphite mt-3"><span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: 'var(--color-navy)' }} />Agendado no calendário</span><span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: 'var(--color-crimson)' }} />Realizado no Focus</span></div>
     <details className="mt-4 text-sm text-graphite"><summary className="cursor-pointer">Ver dados por dia</summary><div className="overflow-x-auto mt-3"><table className="w-full text-left text-xs"><caption className="sr-only">Minutos agendados e estudados por data</caption><thead><tr className="border-b border-border"><th scope="col" className="py-2 pr-4">Data</th><th scope="col" className="py-2 pr-4">Agendado</th><th scope="col" className="py-2">Realizado</th></tr></thead><tbody>{days.map((day) => <tr key={day.date} className="border-b border-border last:border-0"><th scope="row" className="py-2 pr-4 font-normal">{analyticsDateLabel(day.date, true)}</th><td className="py-2 pr-4">{formatMinutes(day.planned_study_minutes)}</td><td className="py-2">{formatMinutes(day.studied_minutes)}</td></tr>)}</tbody></table></div></details>
   </>;
 }

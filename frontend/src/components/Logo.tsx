@@ -1,26 +1,22 @@
-import React from 'react';
-import logoImage from '../assets/edutrack-logo.jpeg';
+import type { CSSProperties } from 'react';
+import symbol from '../assets/brand/edutrack-symbol-crimson.png';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
-  withWordmark?: boolean;
-  inverted?: boolean;
   className?: string;
 }
-const sizes = { sm: 32, md: 40, lg: 52 };
+const sizes = { sm: 40, md: 48, lg: 64 };
+const mask: CSSProperties = {
+  maskImage: `url("${symbol}")`, WebkitMaskImage: `url("${symbol}")`,
+  maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat',
+  maskSize: 'contain', WebkitMaskSize: 'contain',
+  maskPosition: 'center', WebkitMaskPosition: 'center',
+};
 
-/** A marca fornecida é preservada: o viewBox apenas enquadra o monograma. */
-export const Logo: React.FC<LogoProps> = ({ size = 'md', withWordmark = true, inverted = false, className = '' }) => (
-  <span className={`inline-flex items-center gap-2.5 ${className}`}>
-    <svg width={sizes[size]} height={sizes[size]} viewBox="530 80 340 410" role="img" aria-label={withWordmark ? 'Símbolo EduTrack' : 'EduTrack'} className="shrink-0 rounded-sm bg-white">
-      <image href={logoImage} width="1408" height="768" />
-    </svg>
-    {withWordmark && <span className={`font-semibold tracking-[0.035em] ${size === 'lg' ? 'text-2xl' : size === 'md' ? 'text-lg' : 'text-base'} ${inverted ? 'text-white' : 'text-ink'}`}>EDUTRACK</span>}
-  </span>
-);
-
-export const BrandArtwork: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <svg viewBox="350 90 700 590" role="img" aria-label="EduTrack — seu dashboard de estudos" className={`brand-artwork ${className}`}>
-    <image href={logoImage} width="1408" height="768" />
-  </svg>
-);
+/** Uma única silhueta mantém a geometria idêntica entre os temas. */
+export function Logo({ size = 'md', className = '' }: LogoProps) {
+  return <span role="img" aria-label="EduTrack" className={`brand-symbol shrink-0 ${className}`} style={{ ...mask, width: sizes[size], height: sizes[size] }} />;
+}
+export function BrandArtwork({ className = '' }: { className?: string }) {
+  return <span role="img" aria-label="Símbolo EduTrack: conhecimento e progresso" className={`brand-symbol aspect-square ${className}`} style={mask} />;
+}

@@ -1,1 +1,19 @@
-Generic single-database configuration.
+EduTrack: cadeia de migrations para instalações novas e bancos legados.
+
+1b7cae50f901 cria o schema acadêmico inicial (users, subjects, tasks) em uma
+instalação limpa. 079be52cae26 é um checkpoint sem operações que reconhece
+a revisão histórica desses mesmos três schemas em bancos existentes.
+O schema legado foi comparado ao baseline por colunas, tipos, nulabilidade,
+PKs, FKs, defaults e índices; não é necessário recriar tabelas ou executar
+stamp manual em um banco populado que já esteja em 079be52cae26.
+
+A próxima revisão, 96fdd9a96d98, cria o calendário. As revisões seguintes
+adicionam prioridade/estimativa de tarefas, sessões, materiais e anotações.
+
+Antes de atualizar um banco existente, faça backup e execute o upgrade em
+uma cópia, conferindo registros e relacionamentos. Em backend/, com o ambiente
+virtual ativado, execute: python -m alembic upgrade head.
+
+Os testes de migration usam apenas bancos temporários e verificam instalação
+limpa, upgrade a partir de 079be52cae26, preservação de linhas e equivalência
+do schema final com os modelos SQLAlchemy.

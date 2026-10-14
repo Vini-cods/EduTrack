@@ -14,6 +14,7 @@ interface EventModalProps {
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
+  onEditTask?: (taskId: number) => void;
   subjects: Subject[];
   initialDate?: Date | null;
   event?: CalendarEventWithSubject | null;
@@ -35,6 +36,7 @@ export const EventModal: React.FC<EventModalProps> = ({
   onClose,
   onSaved,
   onDeleted,
+  onEditTask,
   subjects,
   initialDate,
   event,
@@ -166,8 +168,9 @@ export const EventModal: React.FC<EventModalProps> = ({
 
         <fieldset disabled={saving} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Título</label>
+            <label htmlFor="calendar-event-title" className="block text-sm font-medium text-graphite mb-1.5">Título</label>
             <input
+              id="calendar-event-title"
               {...register('title', { required: true })}
               placeholder="Ex.: Aula de Cálculo"
               className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
@@ -176,8 +179,9 @@ export const EventModal: React.FC<EventModalProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Categoria</label>
+              <label htmlFor="calendar-event-category" className="block text-sm font-medium text-graphite mb-1.5">Categoria</label>
               <select
+                id="calendar-event-category"
                 {...register('category')}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
               >
@@ -189,8 +193,9 @@ export const EventModal: React.FC<EventModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Disciplina</label>
+              <label htmlFor="calendar-event-subject" className="block text-sm font-medium text-graphite mb-1.5">Disciplina</label>
               <select
+                id="calendar-event-subject"
                 {...register('subject_id')}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
               >
@@ -206,16 +211,18 @@ export const EventModal: React.FC<EventModalProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Início</label>
+              <label htmlFor="calendar-event-start" className="block text-sm font-medium text-graphite mb-1.5">Início</label>
               <input
+                id="calendar-event-start"
                 type="datetime-local"
                 {...register('start', { required: true })}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Fim (opcional)</label>
+              <label htmlFor="calendar-event-end" className="block text-sm font-medium text-graphite mb-1.5">Fim (opcional)</label>
               <input
+                id="calendar-event-end"
                 type="datetime-local"
                 {...register('end')}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
@@ -224,8 +231,9 @@ export const EventModal: React.FC<EventModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Local (opcional)</label>
+            <label htmlFor="calendar-event-location" className="block text-sm font-medium text-graphite mb-1.5">Local (opcional)</label>
             <input
+              id="calendar-event-location"
               {...register('location')}
               placeholder="Ex.: Sala 204"
               className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
@@ -288,8 +296,9 @@ export const EventModal: React.FC<EventModalProps> = ({
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-graphite mb-1.5">Repetir até</label>
+                    <label htmlFor="calendar-event-until" className="block text-sm font-medium text-graphite mb-1.5">Repetir até</label>
                     <input
+                      id="calendar-event-until"
                       type="date"
                       value={until}
                       onChange={(e) => setUntil(e.target.value)}
@@ -302,10 +311,11 @@ export const EventModal: React.FC<EventModalProps> = ({
           )}
 
           {isEditing && event?.task_id && (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-muted flex items-center gap-1.5">
-                <Link2 size={12} /> Sessão do objetivo: <span className="text-graphite font-medium">{event.task_title}</span>
+                <Link2 size={12} /> {event.category === 'estudo' ? 'Sessão do objetivo' : 'Tarefa vinculada'}: <span className="text-graphite font-medium">{event.task_title}</span>
               </p>
+              {onEditTask && <button type="button" onClick={() => onEditTask(event.task_id!)} className="text-xs font-medium text-crimson hover:text-crimson-dark cursor-pointer">Editar tarefa</button>}
               <button
                 type="button"
                 onClick={() => navigate(`/study/focus?task_id=${event.task_id}`)}
@@ -329,6 +339,7 @@ export const EventModal: React.FC<EventModalProps> = ({
               (confirmingDelete ? (
                 <div className="flex flex-wrap items-center gap-2" role="alert">
                   <span className="text-xs text-graphite">{confirmingDelete === 'series' ? 'Excluir todas as ocorrências desta série, incluindo passadas?' : 'Excluir apenas este evento?'} Esta ação não pode ser desfeita.</span>
+                  {event?.task_id && <span className="text-xs text-muted">A tarefa vinculada e seu prazo serão preservados.</span>}
                   <button
                     type="button"
                     onClick={() => handleDelete(confirmingDelete)}

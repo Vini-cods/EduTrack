@@ -71,16 +71,16 @@ export const Calendar: React.FC = () => {
     const start = new Date(rangeStart);
     start.setHours(0, 0, 0, 0);
     const end = new Date(rangeEnd);
-    end.setHours(23, 59, 59, 999);
+    end.setHours(24, 0, 0, 0);
     Promise.all([
       apiClient.get<CalendarEventWithSubject[]>('/calendar-events/', { signal: request.signal,
-        params: { start: toDatetimeLocalValue(start), end: toDatetimeLocalValue(end) + ':59.999' } }),
+        params: { start: toDatetimeLocalValue(start), end: toDatetimeLocalValue(end) } }),
       apiClient.get<TaskWithSubject[]>('/tasks/', { signal: request.signal }),
     ])
       .then(([eventResponse, taskResponse]) => {
         if (request.signal.aborted) return;
         setTasks(taskResponse.data);
-        setEvents(projectCalendarItems(eventResponse.data, taskResponse.data, start, end));
+        setEvents(projectCalendarItems(eventResponse.data, taskResponse.data, start, rangeEnd));
       })
       .catch(() => { if (!request.signal.aborted) setEventsError(true); });
   }, [rangeStart, rangeEnd]);
@@ -243,6 +243,10 @@ export const Calendar: React.FC = () => {
         onClose={closeModal}
         onSaved={handleSaved}
         onDeleted={handleSaved}
+        onEditTask={(taskId) => {
+          setModalOpen(false);
+          setEditingTask(tasks.find((task) => task.id === taskId) ?? null);
+        }}
         subjects={subjects}
         initialDate={initialDate}
         event={editingEvent}

@@ -169,12 +169,12 @@ export const Tasks: React.FC = () => {
             { key: 'concluida', label: 'Concluídas', count: counts.concluida },
           ]}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <select
             value={subjectFilter}
             aria-label="Filtrar tarefas por disciplina"
             onChange={(e) => setSubjectFilter(e.target.value)}
-            className="text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
+            className="max-w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
             <option value="todas">Todas as disciplinas</option>
             {subjects.map((s) => (
@@ -187,7 +187,7 @@ export const Tasks: React.FC = () => {
             value={sortBy}
             aria-label="Ordenar tarefas"
             onChange={(e) => setSortBy(e.target.value as 'due_date' | 'created_at' | 'priority')}
-            className="text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
+            className="max-w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
             <option value="due_date">Ordenar por prazo</option>
             <option value="priority">Ordenar por prioridade</option>

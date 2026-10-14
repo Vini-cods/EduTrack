@@ -90,3 +90,33 @@ def subject(client: TestClient, auth_headers: dict) -> dict:
     """Uma disciplina pronta, do usuário de `auth_headers`."""
     resp = client.post("/api/v1/subjects/", json={"name": "Estruturas de Dados"}, headers=auth_headers)
     return resp.json()
+
+
+@pytest.fixture()
+def academic_data() -> dict:
+    """Dois proprietários com JWT real, sem repetir testes/custo de bcrypt."""
+    from datetime import datetime, timezone
+    from app.core.security import create_access_token
+    from app.models import User, Subject, Task, StudySession, StudySessionStatus
+
+    result = {}
+    with TestingSessionLocal() as db:
+        for label in ("owner", "other"):
+            user = User(name=label, email=f"{label}@fixture.example", hashed_password="not-used-by-these-tests")
+            db.add(user)
+            db.flush()
+            subjects = [Subject(user_id=user.id, name=f"{label} Algoritmos"), Subject(user_id=user.id, name=f"{label} Redes")]
+            db.add_all(subjects)
+            db.flush()
+            tasks = [Task(user_id=user.id, subject_id=subject.id, title=f"{label} Tarefa {index}") for index, subject in enumerate(subjects)]
+            db.add_all(tasks)
+            db.flush()
+            session = StudySession(user_id=user.id, subject_id=subjects[0].id, task_id=tasks[0].id,
+                                   status=StudySessionStatus.CONCLUIDA, started_at=datetime(2026, 10, 10, tzinfo=timezone.utc), accumulated_seconds=1800)
+            db.add(session)
+            db.flush()
+            result[label] = {"user_id": user.id, "subject_id": subjects[0].id, "alternate_subject_id": subjects[1].id,
+                             "task_id": tasks[0].id, "alternate_task_id": tasks[1].id, "session_id": session.id,
+                             "headers": {"Authorization": f"Bearer {create_access_token(user.id)}"}}
+        db.commit()
+    return result

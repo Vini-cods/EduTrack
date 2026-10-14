@@ -3,6 +3,7 @@ import {
   eventsOnDay,
   isSameDay,
   layoutDayEvents,
+  isOutsideTimeGrid,
   timeToY,
   CATEGORY_META,
   WEEKDAY_SHORT,
@@ -84,6 +85,24 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
         </div>
       )}
 
+      {days.some((day) => eventsOnDay(events, day).some((event) => !event.all_day && isOutsideTimeGrid(event, day))) && (
+        <div className="flex border-b border-border bg-surface-muted/30">
+          <div className="w-14 shrink-0 px-1 py-3 text-[10px] text-muted text-center">Antes<br />das 6h</div>
+          {days.map((day) => (
+            <div key={day.toISOString()} className="flex-1 min-w-0 p-1 border-l border-border space-y-1">
+              {eventsOnDay(events, day).filter((event) => !event.all_day && isOutsideTimeGrid(event, day)).map((event) => (
+                <button type="button" key={calendarItemKey(event)} onClick={() => onEventClick(event)}
+                  aria-label={`Editar evento ${event.title}`} title={`${event.title} · ${formatTimeRange(event)}`}
+                  className="w-full text-left p-1.5 text-[11px] leading-tight bg-surface text-ink border border-border rounded-sm cursor-pointer hover:bg-surface-muted">
+                  <span className="block font-medium">{event.title}</span>
+                  <span className="block text-[10px] text-muted">{formatTimeRange(event)}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Grade de horas, rolável */}
       <div className="flex relative overflow-y-auto" style={{ maxHeight: 600 }}>
         <div className="w-14 shrink-0 relative" style={{ height: TOTAL_HEIGHT }}>
@@ -99,7 +118,7 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
         </div>
 
         {days.map((day) => {
-          const positioned = layoutDayEvents(eventsOnDay(events, day).filter((event) => !event.all_day));
+          const positioned = layoutDayEvents(eventsOnDay(events, day), day);
           const isToday = isSameDay(day, today);
           return (
             <div

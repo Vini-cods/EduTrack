@@ -8,6 +8,7 @@ import { AnalyticsControls } from '../components/analytics/AnalyticsControls';
 import { AnalyticsError, AnalyticsLoading } from '../components/analytics/AnalyticsState';
 import { AnalyticsMethodology } from '../components/analytics/AnalyticsMethodology';
 import { StudyTrendChart } from '../components/analytics/StudyTrendChart';
+import { AcademicMetric as Metric } from '../components/analytics/AcademicMetric';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useAnalyticsPeriod } from '../hooks/useAnalyticsPeriod';
 import { useAcademicCapacity } from '../hooks/useAcademicCapacity';
@@ -62,6 +63,3 @@ export function Insights() {
   </div>;
 }
 
-function Metric({ value, label, detail }: { value: string; label: string; detail: string }) {
-  return <div className="min-w-0"><p className="font-serif text-3xl sm:text-4xl text-ink font-semibold tabular-nums">{value}</p><p className="text-sm text-ink font-medium mt-1">{label}</p><p className="text-xs text-muted mt-1 leading-relaxed">{detail}</p></div>;
-}

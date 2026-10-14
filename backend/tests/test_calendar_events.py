@@ -314,3 +314,24 @@ def test_calendar_range_includes_overnight_study_overlap(client, auth_headers):
     )
     assert listed.status_code == 200
     assert [event["title"] for event in listed.json()] == ["Atravessa meia-noite", "Instante hoje"]
+
+
+def test_calendar_range_is_half_open_at_midnight_and_preserves_point_events(client, academic_data):
+    headers = academic_data["owner"]["headers"]
+    for title, start, end in (
+        ("Terminou no início", "2026-10-11T23:00:00", "2026-10-12T00:00:00"),
+        ("Começou no fim", "2026-10-13T00:00:00", "2026-10-13T01:00:00"),
+        ("Instante no início", "2026-10-12T00:00:00", None),
+        ("Duração zero no início", "2026-10-12T00:00:00", "2026-10-12T00:00:00"),
+        ("Instante no fim", "2026-10-13T00:00:00", None),
+        ("Terminou no fim", "2026-10-12T23:00:00", "2026-10-13T00:00:00"),
+    ):
+        assert client.post("/api/v1/calendar-events/", headers=headers,
+                           json={"title": title, "start_datetime": start, "end_datetime": end}).status_code == 201
+    listed = client.get("/api/v1/calendar-events/", headers=headers,
+                        params={"start": "2026-10-12T00:00:00", "end": "2026-10-13T00:00:00"})
+    assert listed.status_code == 200
+    assert {event["title"] for event in listed.json()} == {"Instante no início", "Duração zero no início", "Terminou no fim"}
+    empty = client.get("/api/v1/calendar-events/", headers=headers,
+                       params={"start": "2026-10-12T23:30:00", "end": "2026-10-12T23:30:00"})
+    assert empty.json() == []

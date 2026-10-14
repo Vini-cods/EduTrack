@@ -5,8 +5,8 @@
 > (cobertura de testes/ownership) e `openspec.md` (verificação de estrutura
 > OpenSpec — não encontrada neste projeto).
 
-> Continuação em 12/10/2026: consulte `docs/DEVELOPMENT_STATUS.md` para a
-> evolução do Study Planner/Focus e os limites atuais. Migrações agora são
+> Continuação em 13/10/2026: consulte `docs/DEVELOPMENT_STATUS.md` para a
+> evolução de Dashboard, Notes, carga, analytics e os limites atuais. Migrações agora são
 > versionadas e incluem a criação do schema acadêmico desde um banco vazio.
 
 Este guia parte do zero: clonar/extrair o projeto, instalar tudo, rodar backend e
@@ -89,12 +89,12 @@ Use um arquivo SQLite novo na configuração `SQLITE_PATH` e execute
 faça backup antes de atualizar um banco de uso real.
 
 Isso recria o schema inteiro (users, subjects, tasks, calendar_events,
-study_sessions, materials) vazio, pronto para registrar um usuário novo.
+study_sessions, materials, notes) vazio, pronto para registrar um usuário novo.
 
 Para conferir em qual migration o banco está:
 
 ```bash
-alembic current   # deve mostrar "c218e785d190 (head)"
+alembic current   # deve mostrar "d7a42be19c30 (head)"
 alembic history    # mostra a cadeia completa de migrations
 ```
 

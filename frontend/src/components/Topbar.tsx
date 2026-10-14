@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBreadcrumbValue } from '../contexts/BreadcrumbContext';
 import { isDueToday, isPastDue } from '../lib/date';
 import type { TaskWithSubject } from '../types';
+import { ThemeToggle } from './ThemeToggle';
 
 const routeLabels: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -16,6 +17,7 @@ const routeLabels: Record<string, string> = {
   study: 'Estudo',
   materials: 'Materiais',
   notes: 'Notas',
+  'academic-load': 'Carga acadêmica',
   settings: 'Configurações',
 };
 
@@ -50,8 +52,16 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
       if (newRef.current && !newRef.current.contains(e.target as Node)) setNewOpen(false);
     };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (profileOpen) profileRef.current?.querySelector('button')?.focus();
+      if (notifOpen) notifRef.current?.querySelector('button')?.focus();
+      if (newOpen) newRef.current?.querySelector('button')?.focus();
+      setProfileOpen(false); setNotifOpen(false); setNewOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [profileOpen, notifOpen, newOpen]);
 
   const segment = location.pathname.split('/').filter(Boolean)[0] || 'dashboard';
   const baseLabel = routeLabels[segment] || 'EduTrack';
@@ -101,11 +111,14 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
         </kbd>
       </button>
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <ThemeToggle />
         {/* Ação rápida: nova disciplina/tarefa */}
         <div className="relative" ref={newRef}>
           <button
             onClick={() => setNewOpen((v) => !v)}
+            aria-expanded={newOpen}
+            aria-label="Criar novo registro"
             className="hidden sm:inline-flex items-center gap-1.5 bg-crimson text-white text-sm font-medium px-3.5 py-2 rounded-lg hover:bg-crimson-dark transition-colors cursor-pointer"
           >
             <Plus size={16} />
@@ -126,6 +139,8 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
               >
                 Nova tarefa
               </button>
+              <button onClick={() => { setNewOpen(false); navigate('/notes?new=1'); }} className="w-full text-left px-3.5 py-2 text-sm text-graphite hover:bg-surface-muted hover:text-ink cursor-pointer">Nova nota</button>
+              <button onClick={() => { setNewOpen(false); navigate('/calendar?new=1'); }} className="w-full text-left px-3.5 py-2 text-sm text-graphite hover:bg-surface-muted hover:text-ink cursor-pointer">Novo evento</button>
             </div>
           )}
         </div>
@@ -136,6 +151,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
             onClick={() => setNotifOpen((v) => !v)}
             className="relative w-9 h-9 flex items-center justify-center rounded-lg text-graphite hover:bg-surface-muted cursor-pointer"
             aria-label="Notificações"
+            aria-expanded={notifOpen}
           >
             <Bell size={18} />
             {notifCount > 0 && (
@@ -187,6 +203,8 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
         <div className="relative" ref={profileRef}>
           <button
             onClick={() => setProfileOpen((v) => !v)}
+            aria-label="Menu da conta"
+            aria-expanded={profileOpen}
             className="w-9 h-9 rounded-full bg-navy text-white font-serif font-semibold text-sm flex items-center justify-center cursor-pointer"
           >
             {user?.name ? user.name.charAt(0).toUpperCase() : 'V'}

@@ -1,7 +1,7 @@
 """add calendar_events table
 
 Revision ID: 96fdd9a96d98
-Revises: 1b7cae50f901
+Revises: 079be52cae26
 Create Date: 2026-09-13 14:40:43.917043
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '96fdd9a96d98'
-down_revision: Union[str, None] = '1b7cae50f901'
+down_revision: Union[str, None] = '079be52cae26'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

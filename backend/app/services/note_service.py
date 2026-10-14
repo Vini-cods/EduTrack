@@ -20,6 +20,11 @@ def _resolve_context(db: Session, user_id: int, subject_id: int | None, task_id:
             raise AcademicContextMismatchError("A disciplina não corresponde à sessão selecionada")
         subject_id = session.subject_id if subject_id is None else subject_id
         task_id = session.task_id if task_id is None else task_id
+        # A sessão preserva o contexto de execução. Mover a tarefa depois
+        # não reclassifica retroativamente uma anotação feita nessa sessão.
+        resolve_subject_id(db, user_id, subject_id, None)
+        resolve_subject_id(db, user_id, None, task_id)
+        return subject_id, task_id
     return resolve_subject_id(db, user_id, subject_id, task_id), task_id
 
 

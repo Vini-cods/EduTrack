@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import or_
 
 from app.models.calendar_event import CalendarEvent
 from app.models.subject import Subject
@@ -82,10 +82,13 @@ def get_events_for_user(
     pelas visões de mês/semana/dia, que só precisam carregar o período
     visível em vez de todos os eventos do usuário.
 
-    Inclui qualquer sobreposição com o intervalo, inclusive blocos que
+    O intervalo de consulta é [start, end): inclui o início, exclui o fim.
+    Inclui qualquer sobreposição com esse intervalo, inclusive blocos que
     começam no dia anterior e atravessam a meia-noite. Eventos sem fim
-    são tratados como um instante no horário de início.
+    ou com duração zero são tratados como um instante no horário de início.
     """
+    if start is not None and end is not None and start == end:
+        return []
     query = (
         db.query(CalendarEvent, Subject.name, Task.title)
         .outerjoin(Subject, CalendarEvent.subject_id == Subject.id)
@@ -93,9 +96,9 @@ def get_events_for_user(
         .filter(CalendarEvent.user_id == user_id)
     )
     if start is not None:
-        query = query.filter(func.coalesce(CalendarEvent.end_datetime, CalendarEvent.start_datetime) >= start)
+        query = query.filter(or_(CalendarEvent.end_datetime > start, CalendarEvent.start_datetime >= start))
     if end is not None:
-        query = query.filter(CalendarEvent.start_datetime <= end)
+        query = query.filter(CalendarEvent.start_datetime < end)
 
     rows = query.order_by(CalendarEvent.start_datetime.asc()).all()
     return [_to_with_subject(event, subject_name, task_title) for event, subject_name, task_title in rows]

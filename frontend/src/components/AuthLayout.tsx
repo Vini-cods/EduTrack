@@ -12,7 +12,7 @@ export function AuthLayout({ title, description, children, footer }: { title: st
           <span>Organização acadêmica</span><ArrowUpRight size={18} aria-hidden="true" />
         </div>
         <div className="py-10">
-          <BrandArtwork className="w-72 xl:w-80 mx-auto rounded-sm border border-border" />
+          <BrandArtwork className="w-56 xl:w-64 mx-auto" />
           <div className="auth-rule mt-10 mb-6" />
           <h2 className="font-serif text-4xl xl:text-5xl leading-tight max-w-lg">Mais clareza.<br />Um passo de cada vez.</h2>
           <p className="mt-5 text-graphite max-w-md leading-relaxed">Reúna prazos, disciplinas e estudos em um espaço que acompanha a sua vida acadêmica.</p>

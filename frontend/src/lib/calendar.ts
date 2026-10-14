@@ -42,7 +42,16 @@ export function isSameDay(a: Date, b: Date): boolean {
 }
 
 export function eventsOnDay(events: CalendarEventWithSubject[], day: Date): CalendarEventWithSubject[] {
-  return events.filter((e) => isSameDay(new Date(e.start_datetime), day));
+  const startOfDay = new Date(day);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setDate(endOfDay.getDate() + 1);
+  return events.filter((event) => {
+    const start = new Date(event.start_datetime);
+    if (event.all_day || !event.end_datetime) return isSameDay(start, day);
+    // Intervalos [início, fim): terminar à meia-noite não ocupa o dia seguinte.
+    return start < endOfDay && new Date(event.end_datetime) > startOfDay;
+  });
 }
 
 // --- Visões de tempo (semana/dia): posicionamento por hora ---
@@ -50,6 +59,15 @@ export function eventsOnDay(events: CalendarEventWithSubject[], day: Date): Cale
 export const GRID_START_HOUR = 6;
 export const GRID_END_HOUR = 23;
 export const HOUR_HEIGHT = 48; // px por hora
+
+/** Eventos reais fora da grade recebem uma lista com horário, não uma hora inventada. */
+export function isOutsideTimeGrid(event: CalendarEventWithSubject, day: Date): boolean {
+  const gridStart = new Date(day);
+  gridStart.setHours(GRID_START_HOUR, 0, 0, 0);
+  return event.end_datetime
+    ? new Date(event.end_datetime) <= gridStart
+    : new Date(event.start_datetime) < gridStart;
+}
 
 /** Posição vertical (em px) correspondente a um horário, relativa ao topo da grade. */
 export function timeToY(d: Date): number {
@@ -74,13 +92,21 @@ export interface PositionedEvent {
  *
  * Eventos sem `end_datetime` recebem 1h de duração visual por padrão.
  */
-export function layoutDayEvents(events: CalendarEventWithSubject[]): PositionedEvent[] {
+export function layoutDayEvents(events: CalendarEventWithSubject[], day?: Date): PositionedEvent[] {
+  const gridStart = day ? new Date(day) : null;
+  gridStart?.setHours(GRID_START_HOUR, 0, 0, 0);
+  const gridEnd = day ? new Date(day) : null;
+  gridEnd?.setHours(24, 0, 0, 0);
   const items = events
+    .filter((event) => !event.all_day && (!day || !isOutsideTimeGrid(event, day)))
     .map((event) => {
       const start = new Date(event.start_datetime);
       const end = event.end_datetime ? new Date(event.end_datetime) : new Date(start.getTime() + 60 * 60 * 1000);
-      return { event, start, end };
+      return { event,
+        start: gridStart && start < gridStart ? gridStart : start,
+        end: gridEnd && end > gridEnd ? gridEnd : end };
     })
+    .filter((item) => item.end > item.start)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 
   const clusters: (typeof items)[] = [];
@@ -112,7 +138,7 @@ export function layoutDayEvents(events: CalendarEventWithSubject[]): PositionedE
       result.push({
         event: item.event,
         top: timeToY(item.start),
-        height: Math.max(timeToY(item.end) - timeToY(item.start), 22),
+        height: Math.max((item.end.getTime() - item.start.getTime()) / 3_600_000 * HOUR_HEIGHT, 22),
         column: col,
         totalColumns: 0, // preenchido abaixo, depois que sabemos o total do cluster
       });

@@ -24,7 +24,7 @@ router = APIRouter()
 @router.get("/", response_model=List[CalendarEventWithSubject])
 def read_calendar_events(
     start: Optional[datetime] = Query(None, description="Início do intervalo (ISO 8601), inclusive"),
-    end: Optional[datetime] = Query(None, description="Fim do intervalo (ISO 8601), inclusive"),
+    end: Optional[datetime] = Query(None, description="Fim do intervalo (ISO 8601), exclusivo"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

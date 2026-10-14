@@ -1,0 +1,157 @@
+"""Métricas reais, períodos locais e estimativas sem duplicação de esforço."""
+
+from datetime import date, datetime, timezone
+
+import pytest
+
+from app.models import CalendarEvent, EventCategory, StudySession, StudySessionStatus, Subject, Task, User
+from app.services.analytics_service import AnalyticsValidationError, get_analytics
+from tests.conftest import TestingSessionLocal
+
+
+@pytest.fixture()
+def records():
+    with TestingSessionLocal() as db:
+        user = User(name="Aluno", email="analytics@example.com", hashed_password="not-used")
+        foreign = User(name="Outro", email="foreign-analytics@example.com", hashed_password="not-used")
+        db.add_all([user, foreign])
+        db.flush()
+        subject = Subject(user_id=user.id, name="Algoritmos", color="#123456")
+        foreign_subject = Subject(user_id=foreign.id, name="Privada")
+        db.add_all([subject, foreign_subject])
+        db.commit()
+        yield db, user, subject, foreign, foreign_subject
+
+
+def test_load_subtracts_completed_work_and_scheduled_blocks_once_and_is_private(records):
+    db, user, subject, foreign, foreign_subject = records
+    task = Task(user_id=user.id, subject_id=subject.id, title="Estudar grafos", due_date=date(2026, 10, 14), estimated_hours=4)
+    db.add(task)
+    db.flush()
+    db.add_all([
+        StudySession(user_id=user.id, subject_id=subject.id, task_id=task.id, status=StudySessionStatus.CONCLUIDA,
+                     started_at=datetime(2026, 10, 8, 15), accumulated_seconds=3600),
+        StudySession(user_id=user.id, subject_id=subject.id, status=StudySessionStatus.CONCLUIDA,
+                     started_at=datetime(2026, 10, 12, 13), accumulated_seconds=2700),
+        CalendarEvent(user_id=user.id, subject_id=subject.id, task_id=task.id, title="Bloco 1", category=EventCategory.ESTUDO,
+                      start_datetime=datetime(2026, 10, 13, 10), end_datetime=datetime(2026, 10, 13, 11)),
+        CalendarEvent(user_id=user.id, subject_id=subject.id, task_id=task.id, title="Bloco 2", category=EventCategory.ESTUDO,
+                      start_datetime=datetime(2026, 10, 14, 10), end_datetime=datetime(2026, 10, 14, 11)),
+        CalendarEvent(user_id=user.id, subject_id=subject.id, title="Aula", category=EventCategory.AULA,
+                      start_datetime=datetime(2026, 10, 13, 14), end_datetime=datetime(2026, 10, 13, 16)),
+        Task(user_id=user.id, subject_id=subject.id, title="Concluída", due_date=date(2026, 10, 14), estimated_hours=8, status="concluida"),
+        Task(user_id=foreign.id, subject_id=foreign_subject.id, title="Privada", due_date=date(2026, 10, 14), estimated_hours=10),
+        CalendarEvent(user_id=foreign.id, subject_id=foreign_subject.id, title="Privada", category=EventCategory.ESTUDO,
+                      start_datetime=datetime(2026, 10, 13, 10), end_datetime=datetime(2026, 10, 13, 20)),
+        StudySession(user_id=foreign.id, subject_id=foreign_subject.id, status=StudySessionStatus.CONCLUIDA,
+                     started_at=datetime(2026, 10, 12, 13), accumulated_seconds=36000),
+    ])
+    db.commit()
+    result = get_analytics(db, user.id, date(2026, 10, 12), date(2026, 10, 14), now=datetime(2026, 10, 12, 12, tzinfo=timezone.utc))
+    assert result.summary.studied_minutes == 45
+    assert result.summary.planned_study_minutes == 120
+    assert result.summary.scheduled_minutes == 240
+    assert result.summary.unallocated_task_minutes == 60
+    assert result.summary.total_load_minutes == 300
+    assert result.summary.tasks_due == 2
+    assert result.summary.tasks_completed == 1
+    assert result.summary.completion_rate == 50
+    assert result.summary.open_tasks == 1
+    assert result.daily[1].scheduled_minutes == 180
+    assert result.daily[2].total_load_minutes == 120
+    assert len(result.subjects) == 1
+    assert result.subjects[0].subject_name == "Algoritmos"
+    assert result.subjects[0].total_load_minutes == 300
+
+
+def test_calendar_overnight_is_split_locally_and_study_utc_uses_local_day(records):
+    db, user, subject, _, _ = records
+    db.add_all([
+        CalendarEvent(user_id=user.id, subject_id=subject.id, title="Noturno", category=EventCategory.ESTUDO,
+                      start_datetime=datetime(2026, 10, 12, 23, 30), end_datetime=datetime(2026, 10, 13, 1, 30)),
+        CalendarEvent(user_id=user.id, title="Sem duração", start_datetime=datetime(2026, 10, 12, 12)),
+        StudySession(user_id=user.id, subject_id=subject.id, status=StudySessionStatus.CONCLUIDA,
+                     started_at=datetime(2026, 10, 13, 1), accumulated_seconds=3600),
+        StudySession(user_id=user.id, subject_id=subject.id, status=StudySessionStatus.PAUSADA,
+                     started_at=datetime(2026, 10, 12, 18), accumulated_seconds=7200),
+    ])
+    db.commit()
+    result = get_analytics(db, user.id, date(2026, 10, 12), date(2026, 10, 13), now=datetime(2026, 10, 13, 12, tzinfo=timezone.utc))
+    assert [day.scheduled_minutes for day in result.daily] == [30, 90]
+    assert [day.studied_minutes for day in result.daily] == [60, 0]
+    assert result.summary.completed_sessions == 1
+    assert result.summary.active_days == 1
+    assert result.summary.consistency_percent == 50
+    utc = get_analytics(db, user.id, date(2026, 10, 12), date(2026, 10, 13), timezone_name="UTC", now=datetime(2026, 10, 13, 12, tzinfo=timezone.utc))
+    assert [day.studied_minutes for day in utc.daily] == [0, 60]
+
+
+def test_capacity_overdue_and_missing_estimates_are_explicit(records):
+    db, user, subject, _, _ = records
+    db.add_all([
+        Task(user_id=user.id, subject_id=subject.id, title="Atrasada", due_date=date(2026, 10, 12), estimated_hours=2),
+        Task(user_id=user.id, subject_id=subject.id, title="Sem estimativa", due_date=date(2026, 10, 13)),
+        Task(user_id=user.id, subject_id=subject.id, title="Sem prazo", estimated_hours=3),
+    ])
+    db.commit()
+    result = get_analytics(db, user.id, date(2026, 10, 13), date(2026, 10, 14), daily_capacity_hours=1,
+                           now=datetime(2026, 10, 13, 12, tzinfo=timezone.utc))
+    assert result.summary.open_tasks == 3
+    assert result.summary.overdue_tasks == 1
+    assert result.summary.unknown_estimate_tasks == 1
+    assert result.summary.undated_tasks == 1
+    assert result.daily[0].unallocated_task_minutes == 120
+    assert result.daily[0].load_percent == 200
+    assert result.summary.load_percent == 100
+    assert {insight.id for insight in result.insights} >= {"overload", "overdue", "missing-estimates", "undated"}
+    assert result.summary.tasks_due == 1  # Atrasos não são reescritos como novos prazos.
+
+
+def test_elapsed_consistency_excludes_future_days_and_zero_period_is_honest(records):
+    db, user, subject, _, _ = records
+    db.add(StudySession(user_id=user.id, subject_id=subject.id, status=StudySessionStatus.CONCLUIDA,
+                        started_at=datetime(2026, 10, 13, 10), accumulated_seconds=60))
+    db.commit()
+    result = get_analytics(db, user.id, date(2026, 10, 13), date(2026, 10, 19), now=datetime(2026, 10, 13, 12, tzinfo=timezone.utc))
+    assert result.summary.consistency_percent == 100
+    future = get_analytics(db, user.id, date(2026, 11, 1), date(2026, 11, 7), now=datetime(2026, 10, 13, 12, tzinfo=timezone.utc))
+    assert future.summary.consistency_percent == 0
+    assert future.summary.completion_rate == 0
+    assert future.summary.load_percent == 0
+    assert future.insights[0].id == "start-recording"
+
+
+def test_finished_sessions_outside_period_reduce_remaining_task_estimate(records):
+    db, user, subject, _, _ = records
+    task = Task(user_id=user.id, subject_id=subject.id, title="Pronta", due_date=date(2026, 10, 14), estimated_hours=1)
+    db.add(task)
+    db.flush()
+    db.add(StudySession(user_id=user.id, task_id=task.id, subject_id=subject.id, status=StudySessionStatus.CONCLUIDA,
+                        started_at=datetime(2026, 10, 10, 12), accumulated_seconds=7200))
+    db.commit()
+    result = get_analytics(db, user.id, date(2026, 10, 13), date(2026, 10, 14), now=datetime(2026, 10, 13, 12, tzinfo=timezone.utc))
+    assert result.summary.studied_minutes == 0
+    assert result.summary.unallocated_task_minutes == 0
+    assert result.summary.open_tasks == 1  # Tempo estudado não conclui uma tarefa automaticamente.
+
+
+def test_analytics_endpoint_validation_and_authentication(client, academic_data):
+    headers = academic_data["owner"]["headers"]
+    base = {"start_date": "2026-10-12", "end_date": "2026-10-18"}
+    assert client.get("/api/v1/analytics/", params=base).status_code == 401
+    response = client.get("/api/v1/analytics/", params=base, headers=headers)
+    assert response.status_code == 200
+    assert len(response.json()["daily"]) == 7
+    assert response.json()["period"]["timezone"] == "America/Sao_Paulo"
+    for invalid in (
+        {"end_date": "2026-10-11"}, {"end_date": "2027-10-11"},
+        {"timezone": "fake/timezone"}, {"daily_capacity_hours": 0},
+        {"daily_capacity_hours": "nan"}, {"start_date": "bad-date"},
+    ):
+        assert client.get("/api/v1/analytics/", params={**base, **invalid}, headers=headers).status_code == 422
+
+
+def test_service_rejects_invalid_period(records):
+    db, user, _, _, _ = records
+    with pytest.raises(AnalyticsValidationError):
+        get_analytics(db, user.id, date(2026, 10, 13), date(2026, 10, 12))

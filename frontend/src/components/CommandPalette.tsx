@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   CornerDownLeft,
+  ChartNoAxesCombined,
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { Modal } from './ui/Modal';
@@ -75,12 +76,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
       { id: 'nav-materials', label: 'Abrir materiais', icon: FileText, group: 'Navegação', action: () => go('/materials') },
       { id: 'nav-notes', label: 'Abrir notas', icon: StickyNote, group: 'Navegação', action: () => go('/notes') },
       { id: 'nav-insights', label: 'Abrir insights', icon: Lightbulb, group: 'Navegação', action: () => go('/insights') },
+      { id: 'nav-load', label: 'Ver carga acadêmica', icon: ChartNoAxesCombined, group: 'Navegação', action: () => go('/academic-load') },
       { id: 'nav-settings', label: 'Abrir configurações', icon: Settings, group: 'Navegação', action: () => go('/settings') },
       { id: 'new-subject', label: 'Nova disciplina', icon: Plus, group: 'Ações rápidas', action: () => go('/subjects?new=1') },
       { id: 'new-task', label: 'Nova tarefa', icon: Plus, group: 'Ações rápidas', action: () => go('/tasks?new=1') },
       { id: 'new-event', label: 'Novo evento', icon: Plus, group: 'Ações rápidas', action: () => go('/calendar?new=1') },
       { id: 'new-goal', label: 'Novo objetivo de estudo', icon: Plus, group: 'Ações rápidas', action: () => go('/study?new=1') },
       { id: 'new-material', label: 'Novo material', icon: Plus, group: 'Ações rápidas', action: () => go('/materials?new=1') },
+      { id: 'new-note', label: 'Nova nota', icon: Plus, group: 'Ações rápidas', action: () => go('/notes?new=1') },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -156,6 +159,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="Pesquisar ou navegar..."
+          aria-label="Pesquisar páginas, disciplinas e tarefas"
           className="flex-1 bg-transparent outline-none text-ink placeholder:text-muted text-[15px]"
         />
         <kbd className="hidden sm:inline text-xs text-muted border border-border rounded px-1.5 py-0.5">Esc</kbd>

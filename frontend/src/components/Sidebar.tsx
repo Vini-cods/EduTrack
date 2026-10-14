@@ -10,6 +10,7 @@ import {
   FileText,
   StickyNote,
   Lightbulb,
+  ChartNoAxesCombined,
   Settings,
   LogOut,
   User,
@@ -50,7 +51,10 @@ const groups: NavGroup[] = [
   },
   {
     label: 'Análise',
-    items: [{ to: '/insights', label: 'Insights', icon: Lightbulb }],
+    items: [
+      { to: '/academic-load', label: 'Carga acadêmica', icon: ChartNoAxesCombined },
+      { to: '/insights', label: 'Insights', icon: Lightbulb },
+    ],
   },
 ];
 
@@ -86,7 +90,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggleCol
 
   const renderLink = (item: NavItem) => {
     const link = (
-      <NavLink key={item.to} to={item.to} onClick={onNavigate} className={({ isActive }) => linkClasses(isActive)}>
+      <NavLink key={item.to} to={item.to} aria-label={collapsed ? item.label : undefined} onClick={onNavigate} className={({ isActive }) => linkClasses(isActive)}>
         {({ isActive }) => (
           <>
             <item.icon size={18} className={isActive ? 'text-crimson shrink-0' : 'text-muted shrink-0'} />
@@ -109,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onToggleCol
       {/* Logo + toggle — empilhados verticalmente quando collapsed, para não
           ficarem espremidos lado a lado numa rail estreita. */}
       <div className={`flex ${collapsed ? 'flex-col items-center gap-2.5 py-5' : 'flex-row items-center justify-between px-5 py-5'}`}>
-        <Logo size="sm" withWordmark={!collapsed} />
+        <Logo size="sm" />
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}

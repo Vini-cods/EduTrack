@@ -49,6 +49,7 @@
   --color-warning: #a8721f;
   --color-warning-soft: #faf0dd;
   --color-danger: #b3261e;
+  --color-danger-fill: #b3261e;
   --color-danger-soft: #fbeae8;
 
   /* Tipografia */
@@ -89,6 +90,7 @@
   --color-warning: #e7be72;
   --color-warning-soft: #3c3222;
   --color-danger: #ffa69b;
+  --color-danger-fill: #a7352f;
   --color-danger-soft: #42292b;
   --shadow-soft: 0 2px 12px #00000020;
   --shadow-float: 0 12px 32px #00000045;
@@ -98,6 +100,7 @@
 .dark .bg-crimson { background-color: var(--color-crimson-fill); }
 .dark .hover\:bg-crimson-dark:hover { background-color: #892436; }
 .dark .bg-navy { background-color: var(--color-navy-fill); }
+.dark .bg-danger { background-color: var(--color-danger-fill); }
 .dark .hover\:bg-navy-dark:hover { background-color: #1e3050; }
 .dark .bg-ink\/40 { background-color: #00000080; }
 
@@ -105,7 +108,8 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline-color: var(--color-crimson); }
 
 .auth-rule { background: var(--color-crimson-fill); width: 48px; height: 3px; }
-.brand-artwork { background: #fff; }
+.brand-symbol { display: inline-block; background-color: #8b2028; }
+.dark .brand-symbol { background-color: #f5f1e9; }
 
 body {
   font-family: var(--font-sans);

@@ -62,7 +62,9 @@ export const MonthView: React.FC<MonthViewProps> = ({ monthDate, events, onDayCl
 
               <div className="space-y-1 min-w-0">
                 {visible.map((event) => {
-                  const meta = CATEGORY_META[event.category];
+                  const meta = event.source === 'task'
+                    ? { label: 'Prazo', color: 'var(--color-crimson)', soft: 'var(--color-crimson-soft)' }
+                    : CATEGORY_META[event.category];
                   return (
                     <button
                       type="button"
@@ -76,7 +78,7 @@ export const MonthView: React.FC<MonthViewProps> = ({ monthDate, events, onDayCl
                       className="w-full text-left flex items-center gap-1 text-[11px] px-1 py-0.5 rounded-sm truncate hover:brightness-95 cursor-pointer"
                       style={{ backgroundColor: meta.soft }}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: meta.color }} />
+                      <span className={`w-1.5 h-1.5 shrink-0 ${event.source === 'task' ? '' : 'rounded-full'}`} style={{ backgroundColor: meta.color }} />
                       <span className={`truncate text-ink ${event.task_status === 'concluida' ? 'line-through opacity-70' : ''}`}>
                         {event.source === 'task' && <span className="font-semibold">Prazo · </span>}{event.title}
                       </span>

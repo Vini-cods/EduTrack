@@ -1,6 +1,6 @@
 """Conteúdo em texto simples: a UI não precisa interpretar HTML não confiável."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
@@ -55,5 +55,12 @@ class NoteResponse(NoteBase):
     subject_color: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def expose_utc_timestamps(cls, value: datetime) -> datetime:
+        # SQLite remove tzinfo das colunas UTC. O cliente precisa do offset
+        # explícito para não interpretar o instante como hora civil local.
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
     model_config = ConfigDict(from_attributes=True)

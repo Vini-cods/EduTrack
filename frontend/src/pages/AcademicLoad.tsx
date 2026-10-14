@@ -10,6 +10,7 @@ import { AnalyticsControls } from '../components/analytics/AnalyticsControls';
 import { AnalyticsError, AnalyticsLoading } from '../components/analytics/AnalyticsState';
 import { AnalyticsMethodology } from '../components/analytics/AnalyticsMethodology';
 import { AcademicLoadChart } from '../components/analytics/AcademicLoadChart';
+import { AcademicMetric as Metric } from '../components/analytics/AcademicMetric';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useAnalyticsPeriod } from '../hooks/useAnalyticsPeriod';
 import { useAcademicCapacity } from '../hooks/useAcademicCapacity';
@@ -64,6 +65,3 @@ export function AcademicLoad() {
   </div>;
 }
 
-function Metric({ value, label, detail, alert = false }: { value: string; label: string; detail: string; alert?: boolean }) {
-  return <div className="min-w-0"><p className={`font-serif text-3xl sm:text-4xl font-semibold tabular-nums ${alert ? 'text-danger' : 'text-ink'}`}>{value}</p><p className="text-sm text-ink font-medium mt-1">{label}</p><p className="text-xs text-muted mt-1 leading-relaxed">{detail}</p></div>;
-}
