@@ -9,9 +9,9 @@ interface ProgressBarProps {
 }
 
 const toneClasses = {
-  crimson: 'bg-crimson',
-  navy: 'bg-navy',
-  success: 'bg-success',
+  crimson: 'bg-[var(--color-crimson)]',
+  navy: 'bg-[var(--color-navy)]',
+  success: 'bg-[var(--color-success)]',
 };
 
 /**

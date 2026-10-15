@@ -20,7 +20,7 @@
   /* Texto */
   --color-ink: #1c1b19;
   --color-graphite: #4b4a47;
-  --color-muted: #85817a;
+  --color-muted: #716d66;
 
   /* Bordas */
   --color-border: #e4e1d8;
@@ -188,7 +188,7 @@ body {
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, var(--color-surface-muted) 25%, #e8e5db 37%, var(--color-surface-muted) 63%);
+  background: linear-gradient(90deg, var(--color-surface-muted) 25%, var(--color-border) 37%, var(--color-surface-muted) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
 }

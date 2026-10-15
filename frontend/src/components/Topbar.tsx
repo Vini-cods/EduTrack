@@ -102,10 +102,11 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
       {/* Search -> abre o Command Palette */}
       <button
         onClick={onOpenPalette}
-        className="flex-1 max-w-md flex items-center gap-2.5 px-3.5 py-2 rounded-lg border border-border bg-paper text-muted text-sm hover:border-border-strong transition-colors cursor-pointer mx-auto"
+        className="flex-1 min-w-0 max-w-md flex items-center gap-2.5 px-3.5 py-2 rounded-lg border border-border bg-paper text-muted text-sm hover:border-border-strong transition-colors cursor-pointer mx-auto"
+        aria-label="Pesquisar páginas, disciplinas e tarefas"
       >
         <Search size={15} className="shrink-0" />
-        <span className="truncate">Pesquisar ou navegar...</span>
+        <span className="truncate min-w-0">Pesquisar ou navegar...</span>
         <kbd className="hidden sm:inline ml-auto text-[11px] border border-border rounded px-1.5 py-0.5 shrink-0">
           Ctrl K
         </kbd>
