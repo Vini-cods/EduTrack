@@ -35,3 +35,8 @@ frontend/dist/
 
 # Backups locais do banco
 backend/.backups/
+
+# Dados locais: versionar migrations, não contas e registros pessoais.
+/backend/*.db
+/backend/*.db-*
+/backend/*.sqlite*
