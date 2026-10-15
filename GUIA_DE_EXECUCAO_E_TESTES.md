@@ -5,7 +5,7 @@
 > (cobertura de testes/ownership) e `openspec.md` (verificação de estrutura
 > OpenSpec — não encontrada neste projeto).
 
-> Continuação em 13/10/2026: consulte `docs/DEVELOPMENT_STATUS.md` para a
+> Continuação em 14/10/2026: consulte `docs/DEVELOPMENT_STATUS.md` para a
 > evolução de Dashboard, Notes, carga, analytics e os limites atuais. Migrações agora são
 > versionadas e incluem a criação do schema acadêmico desde um banco vazio.
 
@@ -78,9 +78,10 @@ endereço.
 
 ## 4. Banco de dados
 
-Esta entrega já inclui `backend/edutrack.db` com **todas as migrations
-aplicadas** e os dados que já existiam no seu projeto (sua conta e as tarefas
-que você já tinha criado) — não precisa rodar nada para começar a usar.
+O banco `backend/edutrack.db` fica apenas no ambiente local, fora do Git.
+O arquivo existente e seus dados são preservados. Em um clone novo, execute
+`alembic upgrade head` dentro de `backend` para criar o banco; depois cadastre
+sua conta. Em um ambiente existente, faça backup antes de aplicar migrations.
 
 Se preferir começar com um banco limpo (do zero):
 
@@ -94,7 +95,7 @@ study_sessions, materials, notes) vazio, pronto para registrar um usuário novo.
 Para conferir em qual migration o banco está:
 
 ```bash
-alembic current   # deve mostrar "d7a42be19c30 (head)"
+alembic current   # deve mostrar "e6f38a91d420 (head)"
 alembic history    # mostra a cadeia completa de migrations
 ```
 

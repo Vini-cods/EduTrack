@@ -1,17 +1,19 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 13/10/2026.
+Atualizado em 15/10/2026.
 
 ## Entrega atual
 
-- Logo original enviada pelo usuário aplicada à marca, autenticação e favicon, sem alterar o arquivo de imagem.
+- Símbolo da logo refinado, aplicado sem nome/slogan à marca, autenticação e favicon, com versões crimson, grafite e para fundo escuro. Imagem original preservada.
 - Login e cadastro compartilham layout; validação acessível, confirmação de senha e proteção contra envios simultâneos.
 - Temas claro/escuro/sistema em toda a interface. Preferência local, sincronização entre abas e aplicação antes da renderização.
-- Dashboard responde “o que fazer hoje”: tarefas priorizadas, agenda, próximos prazos, progresso e carga semanal.
+- Dashboard responde “o que fazer hoje”: tarefas priorizadas, agenda, próximos prazos, progresso, carga semanal e gráficos de estudo agendado/realizado e carga diária.
 - Tasks com data aparecem automaticamente no calendário como prazos sem hora, nas visões mês/semana/dia. Edição e exclusão reutilizam o formulário de Task.
 - Exclusão de tarefas preserva eventos agendados e histórico de sessões. Excluir ocorrência e excluir série continuam ações distintas no calendário.
 - Deduplicação por identidade; uma entrega/prova vinculada à tarefa na mesma data representa o prazo. Blocos diferentes e recorrências legítimas são preservados.
 - Calendário recorta eventos que atravessam meia-noite, com intervalo [início, fim), e mantém acessíveis eventos anteriores às 6h.
+- Disciplinas possuem criação, edição e exclusão, com professor, carga horária e período letivo. A exclusão confirma consequências e preserva notas, sessões e eventos desvinculados.
+- Cronograma semanal geral e por disciplina: dias da semana, horário, período, local e prévia de quantidade. Aulas são CalendarEvents recorrentes; calendários semanais aceitam filtros por categoria.
 - Notes implementado: CRUD persistido, busca em título/conteúdo/tags, filtro por disciplina e vínculos com tarefas/sessões. Editor de texto simples com confirmação ao descartar alterações.
 - Academic Load compara duração da agenda e esforço ainda sem bloco com capacidade diária configurável por usuário neste navegador.
 - Insights usa dados reais: estudo planejado/realizado, consistência, entregas, carga por dia e disciplina, tendências semanais e observações determinísticas.
@@ -34,9 +36,13 @@ Tema, capacidade diária e preferências/estado local Pomodoro não sincronizam 
 
 ## Banco e compatibilidade
 
-Head: d7a42be19c30 (Notes), após c218e785d190 (unicidade de sessão ativa).
+Head: e6f38a91d420 (unicidade de aulas completas por usuário/disciplina/intervalo), após d7a42be19c30 (Notes) e c218e785d190 (unicidade de sessão ativa).
 
 A revisão legada 079be52cae26 é mantida na cadeia como ponte sem alterações de schema. Bancos antigos já possuem users/subjects/tasks e seguem normalmente para o calendário e demais tabelas. A revisão 1b7cae50f901 cria esse core em instalações vazias. Não é necessário alterar manualmente alembic_version ou apagar dados.
+
+A revisão e6f também detecta aulas completas duplicadas antes de criar o índice e interrompe sem excluir dados. Criações concorrentes recebem 409 com rollback da série inteira.
+
+No cronograma, editar altera uma ocorrência; para substituir a grade inteira, exclua a série e cadastre outra. Feriados são ajustados manualmente. Cada grade permite até 260 ocorrências em uma janela de até 366 dias; aulas atravessando meia-noite precisam de dois blocos no formulário de grade.
 
 Faça backup antes de atualizar um banco de uso real. Backups locais ficam em backend/.backups, fora do versionamento. Bancos com sessões ativas duplicadas precisam resolver as sessões extras explicitamente antes da migração c218.
 
@@ -59,8 +65,23 @@ Backend, no diretório backend:
 .\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-As validações automatizadas usam bancos isolados. A homologação HTTP desta entrega utiliza SQLite temporário e portas 8001/5174, separadas do banco real. O resultado final dos testes e da revisão no navegador é registrado ao concluir a integração.
+As validações automatizadas usam bancos isolados. A homologação HTTP desta entrega utiliza SQLite temporário e portas 8001/5174, separadas do banco real. Validação final: 129 testes backend e 50 frontend aprovados; type-check e build de produção aprovados. Smoke HTTP real em banco temporário: 27 verificações de disciplinas, grade, calendário, carga, duplicatas e preservação; outras verificações de Notes/calendário foram realizadas durante a integração. As migrações reais foram aplicadas após backup e teste em cópia, com SHA256 confirmando todos os valores anteriores preservados e PRAGMA foreign_key_check sem erros. Login, Dashboard inicial, temas e criação de Notes foram conferidos no navegador; a inspeção visual final da nova grade e dos gráficos ficou limitada por falha de conexão da prévia interna.
 
 ## Próximas evoluções
 
-Syllabus, expansão de busca da Command Palette, sincronização de preferências e histórico temporal mais detalhado de estudo/conclusões continuam oportunidades futuras. Materials já existe; Notes, Academic Load, analytics e Settings de aparência deixaram de ser placeholders.
+Prioridades confirmadas pelo código:
+
+1. Concluir a nova experiência interativa de login/cadastro, preservando autenticação, teclado e os dois temas.
+2. Fechar recuperação real de senha: o backend ainda não envia e-mail e falta formulário/rota frontend de redefinição. A tela de recuperação também precisa distinguir falha de rede de solicitação recebida.
+3. Evoluir syllabus e avaliações/notas acadêmicas. Notes hoje significa anotações em texto, não notas de provas ou médias.
+4. Ampliar busca da Command Palette para Notes e Materials; hoje pesquisa disciplinas e tarefas.
+5. Melhorar tratamento de falha em Materials, que pode manter o estado de carregamento. Materiais são referências/URLs; upload não está implementado.
+6. Revisar sincronização de preferências, histórico temporal de estudo/conclusões, QA visual e preparação para produção.
+
+Materials já existe; Notes, Academic Load, analytics e Settings de aparência deixaram de ser placeholders. Limitações de analytics e cronograma estão descritas acima.
+
+## Commits incrementais
+
+O fluxo está registrado em `AGENTS.md`: concluir e validar uma unidade coerente, revisar o diff e fazer um commit descritivo por assunto. Funcionalidades, correções independentes e documentação devem ser separadas. Push depende de solicitação explícita.
+
+O SQLite local deixou de ser rastreado; o arquivo e seus dados permanecem no ambiente de trabalho. Instalações novas usam as migrations, conforme o guia de execução.

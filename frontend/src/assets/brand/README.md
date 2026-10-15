@@ -8,7 +8,7 @@ Refinamento do monograma enviado pelo usuário, com o E, livro e seta. Nome e sl
 - edutrack-symbol-light.svg: apresentação clara transparente, com a mesma máscara do crimson.
 - edutrack-symbol.svg: apresentação crimson transparente com a mesma máscara.
 
-As imagens foram refinadas pela ferramenta image_gen integrada (skill imagegen). Os SVGs de apresentação incorporam a máscara raster do PNG; não são uma vetorização Bézier. A interface utiliza a mesma silhueta em CSS mask, com preenchimento sólido crimson no tema claro e off-white no tema escuro, evitando alterações de forma entre versões. O JPEG original permanece preservado em ../edutrack-logo.jpeg.
+As imagens foram refinadas pela ferramenta image_gen integrada (skill imagegen). Os SVGs de apresentação incorporam a máscara raster do PNG (1254 × 1254 pixels); não são uma vetorização Bézier. A interface utiliza a mesma silhueta em CSS mask, com preenchimento sólido crimson no tema claro e off-white no tema escuro, evitando alterações de forma entre versões. O JPEG original permanece preservado em ../edutrack-logo.jpeg.
 
 Prompts finais dos PNGs selecionados:
 
