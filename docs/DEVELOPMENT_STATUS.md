@@ -5,7 +5,8 @@ Atualizado em 15/10/2026.
 ## Entrega atual
 
 - Símbolo da logo refinado, aplicado sem nome/slogan à marca, autenticação e favicon, com versões crimson, grafite e para fundo escuro. Imagem original preservada.
-- Login e cadastro compartilham layout; validação acessível, confirmação de senha e proteção contra envios simultâneos.
+- Login e cadastro compartilham uma experiência editorial com prévia interativa Organizar/Focar/Evoluir, navegação por teclado e SVG motion discreto. O formulário aparece primeiro em telas menores; a prévia é explicitamente ilustrativa e não acessa dados acadêmicos.
+- Autenticação mantém validação acessível, confirmação de senha e proteção contra envios simultâneos. Login valida após interação, avisa sobre Caps Lock e mantém foco no primeiro campo inválido. Botões de mostrar senha possuem alvo de 44 px.
 - Temas claro/escuro/sistema em toda a interface. Preferência local, sincronização entre abas e aplicação antes da renderização.
 - Dashboard responde “o que fazer hoje”: tarefas priorizadas, agenda, próximos prazos, progresso, carga semanal e gráficos de estudo agendado/realizado e carga diária.
 - Tasks com data aparecem automaticamente no calendário como prazos sem hora, nas visões mês/semana/dia. Edição e exclusão reutilizam o formulário de Task.
@@ -67,16 +68,17 @@ Backend, no diretório backend:
 
 As validações automatizadas usam bancos isolados. A homologação HTTP desta entrega utiliza SQLite temporário e portas 8001/5174, separadas do banco real. Validação final: 129 testes backend e 50 frontend aprovados; type-check e build de produção aprovados. Smoke HTTP real em banco temporário: 27 verificações de disciplinas, grade, calendário, carga, duplicatas e preservação; outras verificações de Notes/calendário foram realizadas durante a integração. As migrações reais foram aplicadas após backup e teste em cópia, com SHA256 confirmando todos os valores anteriores preservados e PRAGMA foreign_key_check sem erros. Login, Dashboard inicial, temas e criação de Notes foram conferidos no navegador; a inspeção visual final da nova grade e dos gráficos ficou limitada por falha de conexão da prévia interna.
 
+A experiência de entrada recebeu uma validação adicional em 15/10: 50 testes frontend, type-check e build de produção aprovados. Login/cadastro e prévia foram conferidos no navegador, incluindo troca de tema, setas nas abas, mensagens de validação e ausência de transbordamento horizontal em larguras de 320, 390 e 768 px. Reduced motion foi revisado no CSS; a preferência do sistema não foi alterada. Nenhuma API de autenticação foi modificada nesta etapa.
+
 ## Próximas evoluções
 
 Prioridades confirmadas pelo código:
 
-1. Concluir a nova experiência interativa de login/cadastro, preservando autenticação, teclado e os dois temas.
-2. Fechar recuperação real de senha: o backend ainda não envia e-mail e falta formulário/rota frontend de redefinição. A tela de recuperação também precisa distinguir falha de rede de solicitação recebida.
-3. Evoluir syllabus e avaliações/notas acadêmicas. Notes hoje significa anotações em texto, não notas de provas ou médias.
-4. Ampliar busca da Command Palette para Notes e Materials; hoje pesquisa disciplinas e tarefas.
-5. Melhorar tratamento de falha em Materials, que pode manter o estado de carregamento. Materiais são referências/URLs; upload não está implementado.
-6. Revisar sincronização de preferências, histórico temporal de estudo/conclusões, QA visual e preparação para produção.
+1. Fechar recuperação real de senha: o backend ainda não envia e-mail e falta formulário/rota frontend de redefinição. A tela de recuperação também precisa distinguir falha de rede de solicitação recebida.
+2. Evoluir syllabus e avaliações/notas acadêmicas. Notes hoje significa anotações em texto, não notas de provas ou médias.
+3. Ampliar busca da Command Palette para Notes e Materials; hoje pesquisa disciplinas e tarefas.
+4. Melhorar tratamento de falha em Materials, que pode manter o estado de carregamento. Materiais são referências/URLs; upload não está implementado.
+5. Revisar sincronização de preferências, histórico temporal de estudo/conclusões, QA visual e preparação para produção.
 
 Materials já existe; Notes, Academic Load, analytics e Settings de aparência deixaram de ser placeholders. Limitações de analytics e cronograma estão descritas acima.
 

@@ -1,0 +1,206 @@
+.auth-experience {
+  min-height: 100dvh;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+.auth-experience-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 18px clamp(20px, 4vw, 64px);
+  border-bottom: 1px solid var(--color-border);
+}
+.auth-experience-brand { display: inline-flex; border-radius: 4px; }
+.auth-experience-header-note {
+  margin: 0 auto 0 12px;
+  font-size: 12px;
+  letter-spacing: .02em;
+  color: var(--color-graphite);
+}
+.auth-experience-stage {
+  display: grid;
+  gap: 40px;
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+}
+.auth-experience-access { min-width: 0; }
+.auth-experience-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 464px;
+  margin: 0 auto;
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  transition: border-color 180ms ease;
+}
+.auth-experience-sheet::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 24px;
+  height: 3px;
+  width: 44px;
+  background: var(--color-crimson-fill);
+}
+.auth-experience-sheet:focus-within { border-color: var(--color-border-strong); }
+.auth-experience-navigation {
+  display: flex;
+  gap: 26px;
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--color-border);
+}
+.auth-experience-navigation a {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding-bottom: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-graphite);
+}
+.auth-experience-navigation a[aria-current='page'] { color: var(--color-crimson); }
+.auth-experience-navigation a[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--color-crimson);
+}
+.auth-experience-navigation a:hover { color: var(--color-ink); }
+.auth-experience-eyebrow {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--color-graphite);
+}
+.auth-experience-sheet-heading { margin-bottom: 26px; }
+.auth-experience-sheet-heading h1 {
+  margin: 12px 0 10px;
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 550;
+  line-height: 1.14;
+  letter-spacing: -.025em;
+}
+.auth-experience-sheet-heading > p {
+  font-size: 14px;
+  color: var(--color-graphite);
+  line-height: 1.6;
+}
+.auth-experience-sheet input:not([type='checkbox']) { min-height: 48px; }
+.auth-experience-sheet input:focus { background-color: var(--color-paper); }
+.auth-experience-sheet form > fieldset > div { animation: auth-field-enter 400ms ease both; }
+.auth-experience-sheet form > fieldset > div:nth-child(2) { animation-delay: 45ms; }
+.auth-experience-sheet form > fieldset > div:nth-child(3) { animation-delay: 90ms; }
+.auth-experience-sheet form > fieldset > div:nth-child(4) { animation-delay: 135ms; }
+.auth-experience-sheet button[type='submit'] {
+  min-height: 48px;
+  border-radius: 5px;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+.auth-experience-sheet button[type='submit']:active:not(:disabled) { transform: translateY(1px); }
+.auth-experience-account-link {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-graphite);
+  line-height: 1.6;
+}
+.auth-experience-access-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 18px auto 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+.auth-experience-access-note > span {
+  height: 4px;
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-crimson);
+}
+.auth-experience-editorial { min-width: 0; }
+.auth-experience-editorial-heading { max-width: 550px; margin-bottom: 26px; }
+.auth-experience-editorial h2 {
+  margin: 14px 0 18px;
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: clamp(36px, 5.7vw, 76px);
+  line-height: 1.02;
+  letter-spacing: -.045em;
+}
+.auth-experience-editorial h2 em { color: var(--color-crimson); font-weight: 450; }
+.auth-experience-intro { max-width: 410px; font-size: 14px; line-height: 1.75; color: var(--color-graphite); }
+.auth-experience-editorial-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-graphite);
+  font-size: 11px;
+}
+.auth-experience-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 20px clamp(20px, 4vw, 64px);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 11px;
+}
+@keyframes auth-field-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (min-width: 640px) {
+  .auth-experience-stage { padding: 40px; }
+  .auth-experience-sheet { padding: 32px; }
+  .auth-experience-sheet::before { left: 32px; }
+  .auth-experience-editorial { max-width: 600px; width: 100%; margin: 0 auto; }
+}
+@media (min-width: 1024px) {
+  .auth-experience-stage {
+    grid-template-columns: minmax(0, 1.14fr) minmax(0, 1fr);
+    align-items: center;
+    min-height: calc(100dvh - 147px);
+    column-gap: clamp(40px, 6vw, 100px);
+    padding: 42px clamp(40px, 5vw, 72px);
+  }
+  .auth-experience-access { grid-column: 2; grid-row: 1; }
+  .auth-experience-editorial { grid-column: 1; grid-row: 1; }
+  .auth-experience-sheet { padding: 32px 36px; }
+  .auth-experience-sheet::before { left: 36px; }
+}
+@media (max-width: 380px) {
+  .auth-experience-header-note { font-size: 11px; margin-left: 0; }
+  .auth-experience-sheet { padding: 20px; }
+  .auth-experience-stage { padding-left: 14px; padding-right: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-experience *, .auth-experience *::before, .auth-experience *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
