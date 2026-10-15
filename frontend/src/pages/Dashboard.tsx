@@ -11,6 +11,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { PriorityTasks } from '../components/dashboard/PriorityTasks';
 import { TodayAgenda } from '../components/dashboard/TodayAgenda';
 import { UpcomingDeadlines } from '../components/dashboard/UpcomingDeadlines';
+import { DashboardWeeklyCharts } from '../components/dashboard/DashboardWeeklyCharts';
 import { AcademicMetric as Metric } from '../components/analytics/AcademicMetric';
 import { useDashboard } from '../hooks/useDashboard';
 import { useAnalytics } from '../hooks/useAnalytics';
@@ -104,6 +105,7 @@ export function Dashboard() {
         <Link to="/insights" className="flex items-center justify-between gap-3 p-5 rounded-lg border border-border text-sm text-ink bg-surface hover:bg-surface-muted"><span><span className="block font-medium">Entenda seu ritmo</span><span className="block text-xs text-muted mt-1">Estudos, consistência e entregas</span></span><ArrowRight size={18} className="text-crimson shrink-0" /></Link>
       </aside>
     </div>
+    <DashboardWeeklyCharts data={analytics.data} loading={analytics.loading} error={analytics.error} reload={analytics.reload} />
   </div>;
 }
 
