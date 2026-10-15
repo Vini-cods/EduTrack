@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.subject import Subject
 from app.models.task import Task
-from app.schemas.subject import SubjectCreate, SubjectUpdate, SubjectWithProgress
+from app.schemas.subject import SubjectCreate, SubjectUpdate, SubjectResponse, SubjectWithProgress, validate_subject_dates
 from typing import List, Optional
 
 def get_subjects(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[Subject]:
@@ -22,13 +22,7 @@ def get_subjects_with_progress(db: Session, user_id: int, skip: int = 0, limit: 
         progress = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0.0
         result.append(
             SubjectWithProgress(
-                id=subject.id,
-                name=subject.name,
-                description=subject.description,
-                color=subject.color,
-                user_id=subject.user_id,
-                created_at=subject.created_at,
-                updated_at=subject.updated_at,
+                **SubjectResponse.model_validate(subject).model_dump(),
                 total_tasks=total_tasks,
                 completed_tasks=completed_tasks,
                 progress=progress,
@@ -46,12 +40,7 @@ def create_subject(db: Session, subject: SubjectCreate, user_id: int) -> Subject
     """
     Cria uma nova disciplina para o usuário.
     """
-    db_subject = Subject(
-        name=subject.name,
-        description=subject.description,
-        color=subject.color,
-        user_id=user_id
-    )
+    db_subject = Subject(**subject.model_dump(), user_id=user_id)
     db.add(db_subject)
     db.commit()
     db.refresh(db_subject)
@@ -66,6 +55,10 @@ def update_subject(db: Session, subject_id: int, subject_update: SubjectUpdate, 
         return None
 
     update_data = subject_update.model_dump(exclude_unset=True)
+    validate_subject_dates(
+        update_data.get("start_date", db_subject.start_date),
+        update_data.get("end_date", db_subject.end_date),
+    )
     for key, value in update_data.items():
         setattr(db_subject, key, value)
 
@@ -98,13 +91,7 @@ def get_subject_with_progress(db: Session, subject_id: int, user_id: int) -> Opt
     progress = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0.0
 
     return SubjectWithProgress(
-        id=db_subject.id,
-        name=db_subject.name,
-        description=db_subject.description,
-        color=db_subject.color,
-        user_id=db_subject.user_id,
-        created_at=db_subject.created_at,
-        updated_at=db_subject.updated_at,
+        **SubjectResponse.model_validate(db_subject).model_dump(),
         total_tasks=total_tasks,
         completed_tasks=completed_tasks,
         progress=progress

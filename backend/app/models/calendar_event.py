@@ -18,7 +18,7 @@ a opção mais simples que ainda resolve o problema.
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, and_
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -80,6 +80,20 @@ class CalendarEvent(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+
+    # A API verifica duplicatas antes da escrita para dar feedback; este índice
+    # protege também duas abas/processos que gravem a mesma aula simultaneamente.
+    # Eventos livres, sem horário final ou de outras categorias ficam fora dele.
+    __table_args__ = (
+        Index(
+            "uq_calendar_classes_subject_interval",
+            "user_id", "subject_id", "start_datetime", "end_datetime",
+            unique=True,
+            sqlite_where=and_(category == EventCategory.AULA, subject_id.is_not(None), end_datetime.is_not(None)),
+            postgresql_where=and_(category == EventCategory.AULA, subject_id.is_not(None), end_datetime.is_not(None)),
+            mssql_where=and_(category == EventCategory.AULA, subject_id.is_not(None), end_datetime.is_not(None)),
+        ),
     )
 
     user = relationship("User", back_populates="calendar_events")

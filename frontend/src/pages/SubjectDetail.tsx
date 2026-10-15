@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { isAxiosError } from 'axios';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { ArrowLeft, BookOpen, ClipboardList, ExternalLink, FolderOpen, NotebookPen, Pencil, Plus, Trash2 } from 'lucide-react';
 import apiClient from '../api/client';
-import type { Subject, Task, TaskStatus, TaskPriority, Material } from '../types';
-import { useForm } from 'react-hook-form';
-import { ArrowLeft, Plus, Pencil, CheckCircle2, Clock, AlertCircle, ClipboardList, BookOpen, ExternalLink, FolderOpen } from 'lucide-react';
+import type { Material, Subject, Task, TaskStatus } from '../types';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -12,324 +13,110 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Skeleton, RowSkeleton } from '../components/ui/Skeleton';
 import { useSetBreadcrumb } from '../contexts/BreadcrumbContext';
 import { CATEGORY_META, STATUS_META } from '../lib/materials';
-import { PRIORITY_META, PRIORITY_ORDER } from '../lib/tasks';
+import { PRIORITY_META } from '../lib/tasks';
 import { getDueDateStatus, DUE_DATE_TEXT_CLASS, formatShortDate } from '../lib/date';
-import { TaskEditModal } from '../components/tasks/TaskEditModal';
+import { TaskFormModal } from '../components/tasks/TaskFormModal';
+import { SubjectFormModal } from '../components/subjects/SubjectFormModal';
+import { SubjectDeleteModal } from '../components/subjects/SubjectDeleteModal';
+import { ClassSchedule } from '../components/subjects/ClassSchedule';
 
-const statusConfig: Record<string, { label: string; tone: 'warning' | 'navy' | 'success'; icon: React.ElementType }> = {
-  pendente: { label: 'Pendente', tone: 'warning', icon: AlertCircle },
-  em_andamento: { label: 'Em andamento', tone: 'navy', icon: Clock },
-  concluida: { label: 'Concluída', tone: 'success', icon: CheckCircle2 },
+const statusConfig: Record<TaskStatus, { label: string; tone: 'warning' | 'navy' | 'success' }> = {
+  pendente: { label: 'Pendente', tone: 'warning' },
+  em_andamento: { label: 'Em andamento', tone: 'navy' },
+  concluida: { label: 'Concluída', tone: 'success' },
 };
-
-interface TaskFormValues {
-  title: string;
-  due_date: string;
-  priority: TaskPriority;
-}
 
 export const SubjectDetail: React.FC = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [subject, setSubject] = useState<Subject | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const { register, handleSubmit, reset } = useForm<TaskFormValues>();
-
+  const [subjectFormOpen, setSubjectFormOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const pendingTaskIds = useRef(new Set<number>());
+  const [busyTaskIds, setBusyTaskIds] = useState<number[]>([]);
   useSetBreadcrumb(subject?.name ?? null);
 
-  const fetchData = async () => {
-    try {
-      const [subjRes, tasksRes, materialsRes, allSubjectsRes] = await Promise.all([
-        apiClient.get(`/subjects/${id}`),
-        apiClient.get(`/tasks/subject/${id}`),
-        apiClient.get(`/materials/subject/${id}`),
-        apiClient.get('/subjects/'),
-      ]);
-      setSubject(subjRes.data);
-      setTasks(tasksRes.data);
-      setMaterials(materialsRes.data);
-      setAllSubjects(allSubjectsRes.data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  const onAddTask = handleSubmit(async (data) => {
-    try {
-      await apiClient.post('/tasks/', {
-        title: data.title,
-        subject_id: Number(id),
-        due_date: data.due_date || null,
-        priority: data.priority || 'media',
-      });
-      reset();
-      setShowForm(false);
-      fetchData();
-    } catch (e) {
-      console.error(e);
-    }
-  });
-
-  const onChangeStatus = async (taskId: number, status: string) => {
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: status as TaskStatus } : t)));
+    const controller = new AbortController();
+    setLoading(true); setError(''); setSubject(null);
+    const options = { signal: controller.signal };
+    Promise.all([
+      apiClient.get<Subject>(`/subjects/${id}`, options),
+      apiClient.get<Task[]>(`/tasks/subject/${id}`, options),
+      apiClient.get<Material[]>(`/materials/subject/${id}`, options),
+      apiClient.get<Subject[]>('/subjects/', options),
+    ]).then(([subjectResponse, tasksResponse, materialsResponse, allResponse]) => {
+      if (controller.signal.aborted) return;
+      setSubject(subjectResponse.data); setTasks(tasksResponse.data); setMaterials(materialsResponse.data);
+      setAllSubjects(allResponse.data.some(item => item.id === subjectResponse.data.id) ? allResponse.data : [subjectResponse.data, ...allResponse.data]);
+    }).catch(reason => {
+      if (controller.signal.aborted) return;
+      setError(isAxiosError(reason) && reason.response?.status === 404 ? 'Esta disciplina foi removida ou não está disponível para sua conta.' : 'Não foi possível carregar os dados da disciplina.');
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [id, revision]);
+  const refresh = () => { setTaskFormOpen(false); setEditingTask(null); setSubjectFormOpen(false); setRevision(value => value + 1); };
+  const changeStatus = async (taskId: number, status: TaskStatus) => {
+    if (pendingTaskIds.current.has(taskId)) return;
+    pendingTaskIds.current.add(taskId); setBusyTaskIds(Array.from(pendingTaskIds.current));
     try {
       await apiClient.patch(`/tasks/${taskId}/status`, { status });
-    } catch (e) {
-      console.error(e);
-      fetchData();
-    }
+      setTasks(previous => previous.map(task => task.id === taskId ? { ...task, status } : task));
+      toast.success('Status atualizado.');
+    } catch { toast.error('Não foi possível atualizar o status. Tente novamente.'); }
+    finally { pendingTaskIds.current.delete(taskId); setBusyTaskIds(Array.from(pendingTaskIds.current)); }
   };
 
-  if (loading) {
-    return (
-      <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-        <Skeleton className="h-4 w-40 mb-6" />
-        <Skeleton className="h-9 w-72 mb-2" />
-        <Skeleton className="h-4 w-56 mb-8" />
-        <Card padding="none">
-          <div className="divide-y divide-border">
-            <RowSkeleton />
-            <RowSkeleton />
-            <RowSkeleton />
-          </div>
-        </Card>
+  if (loading) return <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto"><Skeleton className="h-4 w-40 mb-6" /><Skeleton className="h-9 w-64 mb-2" /><Skeleton className="h-4 w-56 mb-8" /><Card padding="none"><RowSkeleton /><RowSkeleton /><RowSkeleton /></Card></div>;
+  if (!subject) return <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto"><Card padding="lg"><EmptyState icon={BookOpen} title="Disciplina indisponível" description={error || 'Ela pode ter sido removida ou o link está incorreto.'} /><div className="flex justify-center flex-wrap gap-3"><Button variant="outline" onClick={() => setRevision(value => value + 1)}>Tentar novamente</Button><Link to="/subjects" className="inline-flex items-center px-4 min-h-11 text-sm font-medium text-crimson">Voltar para disciplinas</Link></div></Card></div>;
+
+  const completedCount = tasks.filter(task => task.status === 'concluida').length;
+  const progress = tasks.length ? completedCount / tasks.length * 100 : 0;
+  return <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+    <Link to="/subjects" className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink font-medium mb-4 min-h-11"><ArrowLeft size={16} />Voltar para disciplinas</Link>
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0"><h1 className="font-serif text-3xl font-semibold text-ink break-words">{subject.name}</h1><p className="text-graphite mt-1 whitespace-pre-wrap break-words">{subject.description || 'Sem descrição'}</p>
+        {(subject.professor || subject.workload_hours != null) && <p className="text-sm text-graphite mt-3">{[subject.professor ? `Professor(a): ${subject.professor}` : null, subject.workload_hours != null ? `${subject.workload_hours}h de carga horária` : null].filter(Boolean).join(' · ')}</p>}
+        {(subject.start_date || subject.end_date) && <p className="text-sm text-graphite mt-1">Período: {subject.start_date ? formatShortDate(subject.start_date) : 'não definido'} – {subject.end_date ? formatShortDate(subject.end_date) : 'não definido'}</p>}
       </div>
-    );
-  }
-
-  if (!subject) {
-    return (
-      <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-        <Card padding="lg">
-          <EmptyState icon={BookOpen} title="Disciplina não encontrada" description="Ela pode ter sido removida ou o link está incorreto." />
-        </Card>
-      </div>
-    );
-  }
-
-  const completedCount = tasks.filter((t) => t.status === 'concluida').length;
-  const progress = tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
-
-  return (
-    <div className="p-6 lg:p-8 max-w-4xl mx-auto">
-      <div className="mb-8 animate-fade-in-up">
-        <Link to="/subjects" className="inline-flex items-center gap-2 text-sm text-graphite hover:text-ink font-medium mb-4 transition-colors">
-          <ArrowLeft size={16} />
-          Voltar para disciplinas
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="font-serif text-3xl font-semibold text-ink">{subject.name}</h1>
-            <p className="text-graphite mt-1">{subject.description || 'Sem descrição'}</p>
-          </div>
-          {tasks.length > 0 && (
-            <div className="text-right shrink-0">
-              <p className="text-2xl font-serif font-semibold text-ink">{Math.round(progress)}%</p>
-              <p className="text-xs text-muted">
-                {completedCount} de {tasks.length} tarefas
-              </p>
-            </div>
-          )}
-        </div>
-        {tasks.length > 0 && <ProgressBar value={progress} className="mt-4" size="sm" />}
-      </div>
-
-      <div className="mb-6 animate-fade-in-up" style={{ animationDelay: '60ms' }}>
-        {!showForm ? (
-          <Button icon={<Plus size={18} />} onClick={() => setShowForm(true)}>
-            Nova tarefa
-          </Button>
-        ) : (
-          <Card padding="md">
-            <h3 className="font-serif text-lg font-semibold text-ink mb-4">Adicionar tarefa</h3>
-            <form onSubmit={onAddTask} className="flex flex-col md:flex-row gap-4 items-end">
-              <div className="flex-[2] w-full">
-                <label className="block text-sm font-medium text-graphite mb-1.5">Título</label>
-                <input
-                  {...register('title', { required: true })}
-                  placeholder="Ex: Estudar capítulo 5"
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-                />
-              </div>
-              <div className="w-full md:w-auto md:min-w-[160px]">
-                <label className="block text-sm font-medium text-graphite mb-1.5">Prazo (opcional)</label>
-                <input
-                  type="date"
-                  {...register('due_date')}
-                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
-                />
-              </div>
-              <div className="w-full md:w-auto md:min-w-[130px]">
-                <label className="block text-sm font-medium text-graphite mb-1.5">Prioridade</label>
-                <select
-                  {...register('priority')}
-                  defaultValue="media"
-                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
-                >
-                  {PRIORITY_ORDER.slice()
-                    .reverse()
-                    .map((p) => (
-                      <option key={p} value={p}>
-                        {PRIORITY_META[p].label}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div className="flex gap-3 shrink-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setShowForm(false);
-                    reset();
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit">Adicionar</Button>
-              </div>
-            </form>
-          </Card>
-        )}
-      </div>
-
-      <Card padding="none" className="animate-fade-in-up" style={{ animationDelay: '120ms' }}>
-        <div className="p-5 border-b border-border">
-          <h3 className="font-serif text-lg font-semibold text-ink">Tarefas ({tasks.length})</h3>
-        </div>
-        {tasks.length === 0 ? (
-          <EmptyState icon={ClipboardList} title="Nenhuma tarefa ainda" description="Adicione a primeira tarefa desta disciplina." />
-        ) : (
-          <div className="divide-y divide-border">
-            {tasks.map((task) => {
-              const config = statusConfig[task.status] || statusConfig.pendente;
-              const dueDateStatus = task.status === 'concluida' ? null : getDueDateStatus(task.due_date);
-              return (
-                <div key={task.id} className="flex items-center justify-between gap-3 p-4">
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-sm font-medium truncate ${
-                        task.status === 'concluida' ? 'line-through text-muted' : 'text-ink'
-                      }`}
-                    >
-                      {task.title}
-                    </p>
-                    {task.status !== 'concluida' && (
-                      <p className={`text-xs ${DUE_DATE_TEXT_CLASS[dueDateStatus!]}`}>
-                        {dueDateStatus === 'sem_prazo' ? 'Sem prazo' : formatShortDate(task.due_date!)}
-                        {task.estimated_hours ? ` · ${task.estimated_hours}h` : ''}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {(task.priority === 'urgente' || task.priority === 'alta') && (
-                      <Badge tone={PRIORITY_META[task.priority].tone} size="sm">
-                        {PRIORITY_META[task.priority].label}
-                      </Badge>
-                    )}
-                    <Badge tone={config.tone} icon={<config.icon size={12} />}>
-                      {config.label}
-                    </Badge>
-                    <select
-                      value={task.status}
-                      onChange={(e) => onChangeStatus(task.id, e.target.value)}
-                      className="text-xs border border-border rounded-md px-2 py-1.5 bg-surface text-graphite cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
-                    >
-                      <option value="pendente">Pendente</option>
-                      <option value="em_andamento">Em andamento</option>
-                      <option value="concluida">Concluída</option>
-                    </select>
-                    <button
-                      onClick={() => setEditingTask(task)}
-                      className="text-muted hover:text-ink transition-colors cursor-pointer"
-                      aria-label="Editar tarefa"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      <Card padding="none" className="mt-6 animate-fade-in-up" style={{ animationDelay: '180ms' }}>
-        <div className="p-5 border-b border-border flex items-center justify-between">
-          <h3 className="font-serif text-lg font-semibold text-ink">Materiais ({materials.length})</h3>
-          <div className="flex items-center gap-3">
-            <Link
-              to={`/materials?subject_id=${id}&new=1`}
-              className="text-sm font-medium text-crimson hover:text-crimson-dark inline-flex items-center gap-1"
-            >
-              <Plus size={14} /> Adicionar
-            </Link>
-            {materials.length > 0 && (
-              <Link to={`/materials?subject_id=${id}`} className="text-sm text-graphite hover:text-ink font-medium">
-                Ver todos
-              </Link>
-            )}
-          </div>
-        </div>
-        {materials.length === 0 ? (
-          <EmptyState
-            icon={FolderOpen}
-            title="Nenhum material ainda"
-            description="Adicione PDFs, links ou vídeos para ter os recursos desta disciplina à mão."
-          />
-        ) : (
-          <div className="divide-y divide-border">
-            {materials.slice(0, 5).map((material) => {
-              const catMeta = CATEGORY_META[material.category];
-              const Icon = catMeta.icon;
-              const statusMeta = STATUS_META[material.status];
-              return (
-                <div key={material.id} className="flex items-center gap-3 p-4">
-                  <div className="w-8 h-8 rounded-lg bg-navy-soft flex items-center justify-center shrink-0">
-                    <Icon size={15} className="text-navy" />
-                  </div>
-                  <span className="text-sm font-medium text-ink truncate flex-1">{material.title}</span>
-                  <Badge tone={statusMeta.tone} size="sm">
-                    {statusMeta.label}
-                  </Badge>
-                  {material.url && (
-                    <a
-                      href={material.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted hover:text-crimson transition-colors shrink-0"
-                      aria-label="Abrir material"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      <TaskEditModal
-        task={editingTask}
-        subjects={allSubjects}
-        onClose={() => setEditingTask(null)}
-        onSaved={() => {
-          setEditingTask(null);
-          fetchData();
-        }}
-      />
+      <div className="flex gap-1 flex-wrap"><Button variant="outline" icon={<Pencil size={16} />} onClick={() => setSubjectFormOpen(true)}>Editar disciplina</Button><Button variant="ghost" className="text-danger" icon={<Trash2 size={16} />} onClick={() => setConfirmDelete(true)}>Excluir</Button></div>
     </div>
-  );
+    <div className="mt-5 flex justify-between text-sm text-graphite"><span>{completedCount} de {tasks.length} tarefas concluídas</span><span className="font-semibold text-ink">{Math.round(progress)}%</span></div><ProgressBar value={progress} className="mt-2" size="sm" />
+
+    <ClassSchedule subjects={allSubjects} subjectId={subject.id} />
+
+    <Card padding="none" className="mt-6">
+      <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between flex-wrap gap-3"><h2 className="font-serif text-xl font-semibold text-ink">Tarefas ({tasks.length})</h2><Button size="sm" className="min-h-11" icon={<Plus size={16} />} onClick={() => { setEditingTask(null); setTaskFormOpen(true); }}>Nova tarefa</Button></div>
+      {!tasks.length ? <EmptyState icon={ClipboardList} title="Nenhuma tarefa ainda" description="Adicione uma tarefa com prazo para que ela também apareça no calendário." /> : <div className="divide-y divide-border">{tasks.map(task => {
+        const config = statusConfig[task.status];
+        const dueStatus = task.status === 'concluida' ? null : getDueDateStatus(task.due_date);
+        return <div key={task.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+          <div className="min-w-0 flex-1"><p className={`text-sm font-medium break-words ${task.status === 'concluida' ? 'line-through text-muted' : 'text-ink'}`}>{task.title}</p>{dueStatus && <p className={`mt-1 text-xs ${DUE_DATE_TEXT_CLASS[dueStatus]}`}>{dueStatus === 'sem_prazo' ? 'Sem prazo' : formatShortDate(task.due_date!)}{task.estimated_hours ? ` · ${task.estimated_hours}h estimadas` : ''}</p>}</div>
+          <div className="flex flex-wrap items-center gap-2">{(task.priority === 'urgente' || task.priority === 'alta') && <Badge tone={PRIORITY_META[task.priority].tone} size="sm">{PRIORITY_META[task.priority].label}</Badge>}<Badge tone={config.tone}>{config.label}</Badge>
+            <select value={task.status} disabled={busyTaskIds.includes(task.id)} aria-label={`Status de ${task.title}`} onChange={event => changeStatus(task.id, event.target.value as TaskStatus)} className="text-xs border border-border rounded-md px-2 min-h-11 bg-surface text-graphite disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-crimson/30"><option value="pendente">Pendente</option><option value="em_andamento">Em andamento</option><option value="concluida">Concluída</option></select>
+            <button type="button" disabled={busyTaskIds.includes(task.id)} onClick={() => { setEditingTask(task); setTaskFormOpen(true); }} className="min-h-11 min-w-11 rounded-md text-graphite hover:bg-surface-muted cursor-pointer disabled:opacity-60" aria-label={`Editar tarefa ${task.title}`}><Pencil size={16} className="mx-auto" /></button>
+          </div>
+        </div>;
+      })}</div>}
+    </Card>
+
+    <Card padding="none" className="mt-6"><div className="p-4 sm:p-5 border-b border-border flex items-center justify-between flex-wrap gap-3"><h2 className="font-serif text-xl font-semibold text-ink">Materiais ({materials.length})</h2><Link to={`/materials?subject_id=${id}&new=1`} className="text-sm font-medium text-crimson min-h-11 inline-flex items-center gap-1"><Plus size={15} />Adicionar material</Link></div>
+      {!materials.length ? <EmptyState icon={FolderOpen} title="Nenhum material ainda" description="Guarde links, PDFs e vídeos para ter os recursos desta disciplina à mão." /> : <div className="divide-y divide-border">{materials.slice(0, 5).map(material => {
+        const category = CATEGORY_META[material.category]; const Icon = category.icon; const status = STATUS_META[material.status];
+        return <div key={material.id} className="flex items-center flex-wrap sm:flex-nowrap gap-3 p-4"><div className="w-8 h-8 rounded-md bg-navy-soft flex items-center justify-center shrink-0"><Icon size={15} className="text-navy" /></div><span className="text-sm font-medium text-ink break-words flex-1 min-w-0">{material.title}</span><Badge tone={status.tone} size="sm">{status.label}</Badge>{material.url && <a href={material.url} target="_blank" rel="noopener noreferrer" className="text-graphite hover:text-crimson min-h-11 min-w-11 inline-flex items-center justify-center" aria-label={`Abrir material ${material.title}`}><ExternalLink size={16} /></a>}</div>;
+      })}<Link to={`/materials?subject_id=${id}`} className="min-h-11 px-5 inline-flex items-center text-sm font-medium text-crimson">Ver todos os materiais</Link></div>}
+    </Card>
+    <Link to={`/notes?subject_id=${id}`} className="mt-5 min-h-11 inline-flex items-center gap-2 text-sm font-medium text-crimson"><NotebookPen size={17} />Anotações desta disciplina</Link>
+    <TaskFormModal open={taskFormOpen} task={editingTask} subjects={allSubjects} initialSubjectId={subject.id} onClose={() => setTaskFormOpen(false)} onSaved={refresh} onDeleted={refresh} />
+    <SubjectFormModal open={subjectFormOpen} subject={subject} onClose={() => setSubjectFormOpen(false)} onSaved={refresh} />
+    <SubjectDeleteModal subject={confirmDelete ? subject : null} onClose={() => setConfirmDelete(false)} onDeleted={() => navigate('/subjects', { replace: true })} />
+  </div>;
 };

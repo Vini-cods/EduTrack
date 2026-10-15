@@ -46,7 +46,7 @@ class RecurrenceInput(BaseModel):
             for d in v:
                 if d < 0 or d > 6:
                     raise ValueError("days_of_week deve conter valores entre 0 (segunda) e 6 (domingo)")
-        return v
+        return sorted(set(v)) if v is not None else None
 
 
 class CalendarEventBase(BaseModel):
@@ -78,6 +78,8 @@ class CalendarEventCreate(CalendarEventBase):
     def recurrence_until_after_start(self) -> "CalendarEventCreate":
         if self.recurrence is not None and self.recurrence.until < self.start_datetime.date():
             raise ValueError("A data final da recorrência não pode ser anterior à data de início do evento")
+        if self.recurrence is not None and (self.recurrence.until - self.start_datetime.date()).days > 366:
+            raise ValueError("O intervalo de recorrência deve ter no máximo 366 dias")
         return self
 
 

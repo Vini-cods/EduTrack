@@ -40,7 +40,7 @@ def test_active_session_index_upgrade_and_downgrade(migration_database):
         connection.execute(text("INSERT INTO study_sessions VALUES (1, 'CONCLUIDA'), (1, 'CONCLUIDA'), (1, 'PAUSADA')"))
 
     command.stamp(config, "ebf926553436")
-    command.upgrade(config, "head")
+    command.upgrade(config, "c218e785d190")
     assert "uq_study_sessions_active_user" in {index["name"] for index in inspect(engine).get_indexes("study_sessions")}
     with pytest.raises(IntegrityError):
         with engine.begin() as connection:

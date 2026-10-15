@@ -39,6 +39,7 @@ function periodLabel(view: ViewMode, date: Date): string {
 export const Calendar: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<ViewMode>('month');
+  const [categoryFilter, setCategoryFilter] = useState<EventCategory | 'all'>('all');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEventWithSubject[] | null>(null);
   const [eventsError, setEventsError] = useState(false);
@@ -49,6 +50,7 @@ export const Calendar: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEventWithSubject | null>(null);
   const [initialDate, setInitialDate] = useState<Date | null>(null);
+  const visibleEvents = useMemo(() => events?.filter((event) => categoryFilter === 'all' || event.category === categoryFilter) ?? [], [events, categoryFilter]);
 
   const [rangeStart, rangeEnd] = useMemo<[Date, Date]>(() => {
     if (view === 'month') {
@@ -98,6 +100,8 @@ export const Calendar: React.FC = () => {
   // para uma data específica vinda de outra página (?date=YYYY-MM-DD, ex.:
   // link "Ver no calendário" do Study Planner).
   useEffect(() => {
+    const viewParam = searchParams.get('view');
+    const categoryParam = searchParams.get('category');
     const dateParam = searchParams.get('date');
     if (dateParam) {
       const parsed = new Date(dateParam + 'T00:00:00');
@@ -112,6 +116,8 @@ export const Calendar: React.FC = () => {
       setInitialDate(parsed && !isNaN(parsed.getTime()) ? parsed : null);
       setModalOpen(true);
     }
+    if (viewParam === 'month' || viewParam === 'week' || viewParam === 'day') setView(viewParam);
+    if (categoryParam === 'all' || CATEGORIES.includes(categoryParam as EventCategory)) setCategoryFilter(categoryParam as EventCategory | 'all');
     if (dateParam || searchParams.get('new') === '1') {
       const next = new URLSearchParams(searchParams);
       next.delete('date');
@@ -155,7 +161,16 @@ export const Calendar: React.FC = () => {
 
   const showDay = (day: Date) => {
     setCurrentDate(day);
-    setView('day');
+    changeView('day');
+  };
+
+  const changeView = (value: ViewMode) => {
+    setView(value);
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set('view', value); return next; }, { replace: true });
+  };
+  const changeCategory = (value: EventCategory | 'all') => {
+    setCategoryFilter(value);
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set('category', value); return next; }, { replace: true });
   };
 
   return (
@@ -192,15 +207,18 @@ export const Calendar: React.FC = () => {
           </Button>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3">
+        <label><span className="sr-only">Tipo de atividade</span><select value={categoryFilter} onChange={(event) => changeCategory(event.target.value as EventCategory | 'all')} className="min-h-11 rounded-md border border-border bg-surface text-ink text-sm px-3 py-2"><option value="all">Todas as atividades</option>{CATEGORIES.map(category => <option value={category} key={category}>{CATEGORY_META[category].label}</option>)}</select></label>
         <Tabs
           value={view}
-          onChange={(v) => setView(v as ViewMode)}
+          onChange={(v) => changeView(v as ViewMode)}
           tabs={[
             { key: 'month', label: 'Mês' },
             { key: 'week', label: 'Semana' },
             { key: 'day', label: 'Dia' },
           ]}
         />
+        </div>
       </div>
 
       {/* Legenda de categorias */}
@@ -226,15 +244,15 @@ export const Calendar: React.FC = () => {
         ) : view === 'month' ? (
           <MonthView
             monthDate={currentDate}
-            events={events}
+            events={visibleEvents}
             onDayClick={(day) => openCreateModal(day)}
             onEventClick={openEditModal}
             onShowMore={showDay}
           />
         ) : view === 'week' ? (
-          <WeekView currentDate={currentDate} events={events} onSlotClick={openCreateModal} onEventClick={openEditModal} />
+          <WeekView currentDate={currentDate} events={visibleEvents} onSlotClick={openCreateModal} onEventClick={openEditModal} />
         ) : (
-          <DayView currentDate={currentDate} events={events} onSlotClick={openCreateModal} onEventClick={openEditModal} />
+          <DayView currentDate={currentDate} events={visibleEvents} onSlotClick={openCreateModal} onEventClick={openEditModal} />
         )}
       </div>
 

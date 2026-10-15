@@ -17,6 +17,7 @@ interface TaskFormModalProps {
   open?: boolean;
   studyGoal?: boolean;
   subjects: Subject[];
+  initialSubjectId?: number;
   onClose: () => void;
   onSaved: () => void;
   onCreated?: (task: Task) => void;
@@ -26,7 +27,7 @@ interface TaskFormModalProps {
 const selectClass = 'w-full min-h-11 px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-crimson/30';
 
 /** Um formulário para criação/edição, compartilhado por Tasks, Subjects e Planner. */
-export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, open, studyGoal = false, subjects, onClose, onSaved, onCreated, onDeleted }) => {
+export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, open, studyGoal = false, subjects, initialSubjectId, onClose, onSaved, onCreated, onDeleted }) => {
   const isOpen = open ?? !!task;
   const saving = useRef(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -40,11 +41,11 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, open, studyG
     if (isOpen) {
       setConfirmingDelete(false);
       reset({ title: task?.title || '', description: task?.description || '',
-      subject_id: task ? String(task.subject_id) : '', due_date: task?.due_date || '',
+      subject_id: task ? String(task.subject_id) : (initialSubjectId ? String(initialSubjectId) : ''), due_date: task?.due_date || '',
       priority: task?.priority || 'media', status: task?.status || 'pendente',
       estimated_hours: task?.estimated_hours ? String(task.estimated_hours) : '' });
     }
-  }, [isOpen, task, reset]);
+  }, [isOpen, task, initialSubjectId, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
     if (saving.current) return;

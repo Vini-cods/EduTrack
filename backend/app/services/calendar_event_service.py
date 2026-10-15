@@ -6,8 +6,9 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
-from app.models.calendar_event import CalendarEvent
+from app.models.calendar_event import CalendarEvent, EventCategory
 from app.models.subject import Subject
 from app.models.task import Task
 from app.schemas.calendar_event import (
@@ -27,6 +28,60 @@ from app.services.academic_context import AcademicContextNotFoundError, resolve_
 MAX_OCCURRENCES = 260
 
 
+class DuplicateClassError(ValueError):
+    """Uma grade não pode criar novamente uma aula já cadastrada."""
+
+    def __init__(self) -> None:
+        super().__init__("Já existe uma aula dessa disciplina com a mesma data e horário. Revise a grade antes de salvar.")
+
+
+def _commit_events(db: Session) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        # SQLite identifica a chave pelas colunas; SQL Server/PostgreSQL usam
+        # o nome do índice. Não converta violações de outras constraints em 409.
+        error = str(exc.orig)
+        columns = "calendar_events.user_id, calendar_events.subject_id, calendar_events.start_datetime, calendar_events.end_datetime"
+        if "uq_calendar_classes_subject_interval" in error or f"UNIQUE constraint failed: {columns}" in error:
+            raise DuplicateClassError() from exc
+        raise
+
+
+def _validate_class_duplicates(
+    db: Session,
+    user_id: int,
+    subject_id: Optional[int],
+    category: EventCategory,
+    occurrences: List[Tuple[datetime, Optional[datetime]]],
+    exclude_id: Optional[int] = None,
+) -> None:
+    if category != EventCategory.AULA or not occurrences:
+        return
+    # CalendarEvent usa horários locais sem fuso no SQLite. Compare a mesma
+    # representação usada na persistência, inclusive quando o cliente envia offset.
+    starts = [start.replace(tzinfo=None) for start, _ in occurrences]
+    query = db.query(CalendarEvent).filter(
+        CalendarEvent.user_id == user_id,
+        CalendarEvent.subject_id == subject_id,
+        CalendarEvent.category == EventCategory.AULA,
+        CalendarEvent.start_datetime.in_(starts),
+    )
+    if exclude_id is not None:
+        query = query.filter(CalendarEvent.id != exclude_id)
+    existing = {
+        (event.start_datetime.replace(tzinfo=None), event.end_datetime.replace(tzinfo=None) if event.end_datetime else None)
+        for event in query.all()
+    }
+    requested = {
+        (start.replace(tzinfo=None), end.replace(tzinfo=None) if end else None)
+        for start, end in occurrences
+    }
+    if existing & requested:
+        raise DuplicateClassError()
+
+
 def expand_recurrence(
     start_datetime: datetime, end_datetime: Optional[datetime], recurrence: RecurrenceInput
 ) -> List[Tuple[datetime, Optional[datetime]]]:
@@ -43,9 +98,11 @@ def expand_recurrence(
 
     occurrences: List[Tuple[datetime, Optional[datetime]]] = []
     current = start_datetime
-    while current.date() <= recurrence.until and len(occurrences) < MAX_OCCURRENCES:
+    while current.date() <= recurrence.until:
         matches = recurrence.type == "daily" or current.weekday() in days_of_week
         if matches:
+            if len(occurrences) == MAX_OCCURRENCES:
+                raise CalendarEventValidationError("A recorrência ultrapassa o limite de 260 ocorrências. Reduza o período ou os dias selecionados.")
             occurrences.append((current, current + duration if duration else None))
         current += timedelta(days=1)
 
@@ -75,7 +132,8 @@ def _to_with_subject(
 
 
 def get_events_for_user(
-    db: Session, user_id: int, start: Optional[datetime] = None, end: Optional[datetime] = None
+    db: Session, user_id: int, start: Optional[datetime] = None, end: Optional[datetime] = None,
+    subject_id: Optional[int] = None, category: Optional[EventCategory] = None,
 ) -> List[CalendarEventWithSubject]:
     """
     Lista eventos do usuário, opcionalmente restritos a um intervalo — usado
@@ -99,6 +157,10 @@ def get_events_for_user(
         query = query.filter(or_(CalendarEvent.end_datetime > start, CalendarEvent.start_datetime >= start))
     if end is not None:
         query = query.filter(CalendarEvent.start_datetime < end)
+    if subject_id is not None:
+        query = query.filter(CalendarEvent.subject_id == subject_id)
+    if category is not None:
+        query = query.filter(CalendarEvent.category == category)
 
     rows = query.order_by(CalendarEvent.start_datetime.asc()).all()
     return [_to_with_subject(event, subject_name, task_title) for event, subject_name, task_title in rows]
@@ -132,6 +194,7 @@ def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Op
     )
 
     if payload.recurrence is None:
+        _validate_class_duplicates(db, user_id, subject_id, payload.category, [(payload.start_datetime, payload.end_datetime)])
         db_event = CalendarEvent(
             **common,
             start_datetime=payload.start_datetime,
@@ -139,20 +202,21 @@ def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Op
             recurrence_group_id=None,
         )
         db.add(db_event)
-        db.commit()
+        _commit_events(db)
         db.refresh(db_event)
         return [db_event]
 
     occurrences = expand_recurrence(payload.start_datetime, payload.end_datetime, payload.recurrence)
     if not occurrences:
         raise CalendarEventValidationError("A recorrência não contém nenhuma ocorrência no intervalo selecionado")
+    _validate_class_duplicates(db, user_id, subject_id, payload.category, occurrences)
     group_id = uuid.uuid4().hex
     db_events = [
         CalendarEvent(**common, start_datetime=occ_start, end_datetime=occ_end, recurrence_group_id=group_id)
         for occ_start, occ_end in occurrences
     ]
     db.add_all(db_events)
-    db.commit()
+    _commit_events(db)
     for e in db_events:
         db.refresh(e)
     return db_events
@@ -184,11 +248,16 @@ def update_event(db: Session, event_id: int, update: CalendarEventUpdate, user_i
         update_data.get("start_datetime", db_event.start_datetime),
         update_data.get("end_datetime", db_event.end_datetime),
     )
+    _validate_class_duplicates(
+        db, user_id, resolved_subject_id, update_data.get("category", db_event.category),
+        [(update_data.get("start_datetime", db_event.start_datetime), update_data.get("end_datetime", db_event.end_datetime))],
+        exclude_id=db_event.id,
+    )
 
     for key, value in update_data.items():
         setattr(db_event, key, value)
 
-    db.commit()
+    _commit_events(db)
     db.refresh(db_event)
     return db_event
 

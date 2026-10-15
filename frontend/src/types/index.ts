@@ -10,6 +10,10 @@ export interface Subject {
   name: string;
   description?: string | null;
   color?: string | null;
+  professor?: string | null;
+  workload_hours?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
   total_tasks?: number;
   completed_tasks?: number;
   progress?: number;

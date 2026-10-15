@@ -4,7 +4,7 @@ from typing import List
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
-from app.schemas.subject import SubjectCreate, SubjectUpdate, SubjectResponse, SubjectWithProgress
+from app.schemas.subject import SubjectCreate, SubjectUpdate, SubjectResponse, SubjectWithProgress, SubjectValidationError
 from app.services import subject_service
 
 router = APIRouter()
@@ -56,7 +56,10 @@ def update_subject(
     """
     Atualiza uma disciplina do usuário.
     """
-    subject = subject_service.update_subject(db=db, subject_id=subject_id, subject_update=subject_in, user_id=current_user.id)
+    try:
+        subject = subject_service.update_subject(db=db, subject_id=subject_id, subject_update=subject_in, user_id=current_user.id)
+    except SubjectValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not subject:
         raise HTTPException(status_code=404, detail="Disciplina não encontrada")
     return subject

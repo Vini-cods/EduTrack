@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
+from app.models.calendar_event import EventCategory
 from app.schemas.calendar_event import (
     CalendarEventCreate,
     CalendarEventCreateResult,
@@ -25,6 +26,8 @@ router = APIRouter()
 def read_calendar_events(
     start: Optional[datetime] = Query(None, description="Início do intervalo (ISO 8601), inclusive"),
     end: Optional[datetime] = Query(None, description="Fim do intervalo (ISO 8601), exclusivo"),
+    subject_id: Optional[int] = Query(None, gt=0),
+    category: Optional[EventCategory] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -37,7 +40,7 @@ def read_calendar_events(
             validate_interval(start, end)
         except CalendarEventValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return calendar_event_service.get_events_for_user(db=db, user_id=current_user.id, start=start, end=end)
+    return calendar_event_service.get_events_for_user(db=db, user_id=current_user.id, start=start, end=end, subject_id=subject_id, category=category)
 
 
 @router.post("/", response_model=CalendarEventCreateResult, status_code=201)
@@ -53,6 +56,8 @@ def create_calendar_event(
     """
     try:
         created = calendar_event_service.create_events(db=db, payload=event, user_id=current_user.id)
+    except calendar_event_service.DuplicateClassError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (AcademicContextMismatchError, CalendarEventValidationError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if created is None:
@@ -72,6 +77,8 @@ def update_calendar_event(
     """Atualiza uma ocorrência específica (mesmo que pertença a uma série recorrente)."""
     try:
         updated = calendar_event_service.update_event(db=db, event_id=event_id, update=event_update, user_id=current_user.id)
+    except calendar_event_service.DuplicateClassError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (AcademicContextMismatchError, CalendarEventValidationError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not updated:
