@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { Plus, ExternalLink, Pencil, Trash2, FolderOpen } from 'lucide-react';
 import apiClient from '../api/client';
-import type { MaterialWithSubject, MaterialCategory, MaterialStatus, Subject } from '../types';
+import type { Material, MaterialWithSubject, MaterialCategory, MaterialStatus, Subject } from '../types';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -34,47 +34,108 @@ export const Materials: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('todas');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<MaterialWithSubject | null>(null);
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [subjectsLoading, setSubjectsLoading] = useState(true);
+  const [subjectsError, setSubjectsError] = useState('');
+  const [subjectsRevision, setSubjectsRevision] = useState(0);
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+  const materialRequest = useRef<AbortController | null>(null);
+  const mutationLocks = useRef(new Set<number>());
+  const mounted = useRef(false);
+  const materialListRef = useRef<HTMLDivElement>(null);
 
-  const loadMaterials = () => {
-    apiClient.get('/materials/').then((res) => setMaterials(res.data)).catch(console.error);
-  };
-
-  useEffect(() => {
-    loadMaterials();
-    apiClient.get('/subjects/').then((res) => setSubjects(res.data)).catch(console.error);
+  const loadMaterials = useCallback(async () => {
+    materialRequest.current?.abort();
+    const controller = new AbortController();
+    materialRequest.current = controller;
+    setLoading(true);
+    setLoadError('');
+    try {
+      const response = await apiClient.get<MaterialWithSubject[]>('/materials/', { signal: controller.signal, timeout: 15_000 });
+      if (!controller.signal.aborted) setMaterials(response.data);
+    } catch {
+      if (!controller.signal.aborted) setLoadError('Não foi possível carregar os materiais. Tente novamente.');
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
+    void loadMaterials();
+    return () => { mounted.current = false; materialRequest.current?.abort(); };
+  }, [loadMaterials]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSubjectsLoading(true);
+    setSubjectsError('');
+    apiClient.get<Subject[]>('/subjects/', { signal: controller.signal, timeout: 15_000 })
+      .then(response => { if (!controller.signal.aborted) setSubjects(response.data); })
+      .catch(() => { if (!controller.signal.aborted) setSubjectsError('Não foi possível carregar as disciplinas para os filtros e o formulário.'); })
+      .finally(() => { if (!controller.signal.aborted) setSubjectsLoading(false); });
+    return () => controller.abort();
+  }, [subjectsRevision]);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
     const subjectIdParam = searchParams.get('subject_id');
-    if (subjectIdParam) setSubjectFilter(subjectIdParam);
+    if (subjectIdParam) { setSubjectFilter(subjectIdParam); next.delete('subject_id'); }
     if (searchParams.get('new') === '1') {
       setEditing(null);
       setModalOpen(true);
+      next.delete('new');
     }
-    if (subjectIdParam || searchParams.get('new') === '1') {
-      setSearchParams({}, { replace: true });
+    const id = Number(searchParams.get('highlight'));
+    if (Number.isSafeInteger(id) && id > 0) {
+      setHighlightedId(id);
+      setStatusTab('todos');
+      setSubjectFilter('todas');
+      setCategoryFilter('todas');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const onDelete = async (id: number) => {
+    if (mutationLocks.current.has(id)) return;
     if (!window.confirm('Excluir este material?')) return;
+    mutationLocks.current.add(id);
+    setBusyIds(new Set(mutationLocks.current));
+    materialRequest.current?.abort();
+    setLoading(false);
     try {
       await apiClient.delete(`/materials/${id}`);
-      toast.success('Material excluído.');
-      loadMaterials();
+      if (mounted.current) {
+        setMaterials(previous => previous?.filter(material => material.id !== id) ?? null);
+        toast.success('Material excluído.');
+      }
     } catch {
-      toast.error('Não foi possível excluir.');
+      if (mounted.current) toast.error('Não foi possível excluir. O material foi mantido.');
+    } finally {
+      mutationLocks.current.delete(id);
+      if (mounted.current) setBusyIds(new Set(mutationLocks.current));
     }
   };
 
   const onChangeStatus = async (id: number, status: MaterialStatus) => {
-    setMaterials((prev) => prev?.map((m) => (m.id === id ? { ...m, status } : m)) ?? null);
+    if (mutationLocks.current.has(id)) return;
+    mutationLocks.current.add(id);
+    setBusyIds(new Set(mutationLocks.current));
+    materialRequest.current?.abort();
+    setLoading(false);
     try {
-      await apiClient.patch(`/materials/${id}/status`, { status });
+      const response = await apiClient.patch<Material>(`/materials/${id}/status`, { status });
+      if (mounted.current) {
+        setMaterials(previous => previous?.map(material => material.id === id ? { ...material, ...response.data } : material) ?? null);
+        toast.success('Status atualizado.');
+      }
     } catch {
-      toast.error('Não foi possível atualizar o status.');
-      loadMaterials();
+      if (mounted.current) toast.error('Não foi possível atualizar. O status anterior foi mantido.');
+    } finally {
+      mutationLocks.current.delete(id);
+      if (mounted.current) setBusyIds(new Set(mutationLocks.current));
     }
   };
 
@@ -86,6 +147,17 @@ export const Materials: React.FC = () => {
     return list;
   }, [materials, statusTab, subjectFilter, categoryFilter]);
 
+  useEffect(() => {
+    const id = Number(searchParams.get('highlight'));
+    if (loading || !Number.isSafeInteger(id) || id <= 0) return;
+    const target = materialListRef.current?.querySelector<HTMLElement>(`[data-material-id="${id}"]`);
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    const next = new URLSearchParams(searchParams); next.delete('highlight');
+    setSearchParams(next, { replace: true });
+  }, [loading, filtered, searchParams, setSearchParams]);
+
   const counts = useMemo(() => {
     const list = materials ?? [];
     return {
@@ -96,17 +168,17 @@ export const Materials: React.FC = () => {
     };
   }, [materials]);
 
-  const loading = materials === null;
   const isUnfiltered = statusTab === 'todos' && subjectFilter === 'todas' && categoryFilter === 'todas';
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto" aria-busy={loading}>
       <SectionHeader
         title="Materiais"
         description="PDFs, links, vídeos e outros recursos organizados por disciplina."
         action={
           <Button
             icon={<Plus size={16} />}
+            disabled={subjectsLoading || subjects.length === 0 || busyIds.size > 0}
             onClick={() => {
               setEditing(null);
               setModalOpen(true);
@@ -116,6 +188,12 @@ export const Materials: React.FC = () => {
           </Button>
         }
       />
+
+      {loadError && <div role="alert" className="mt-5 border border-danger/30 bg-danger-soft rounded-md p-4 text-sm text-ink flex flex-wrap items-center gap-3"><p className="flex-1 min-w-48">{loadError}{materials !== null && ' Os materiais já carregados continuam disponíveis.'}</p><Button variant="outline" size="sm" loading={loading} disabled={busyIds.size > 0} onClick={() => void loadMaterials()}>Tentar novamente</Button></div>}
+      {subjectsError && <div role="alert" className="mt-5 border border-warning/30 bg-warning-soft rounded-md p-4 text-sm text-ink flex flex-wrap items-center gap-3"><p className="flex-1 min-w-48">{subjectsError}</p><Button variant="outline" size="sm" loading={subjectsLoading} onClick={() => setSubjectsRevision(value => value + 1)}>Recarregar disciplinas</Button></div>}
+      {!subjectsLoading && !subjectsError && subjects.length === 0 && <p className="mt-5 text-sm text-graphite">Os materiais pertencem a uma disciplina. <Link to="/subjects?new=1" className="text-crimson underline">Cadastre sua primeira disciplina</Link> para começar.</p>}
+      {loading && materials !== null && <p role="status" className="mt-4 text-sm text-muted">Atualizando materiais…</p>}
+      {!loading && materials !== null && highlightedId !== null && !materials.some(material => material.id === highlightedId) && <p role="status" className="mt-4 text-sm text-graphite">O material solicitado não está disponível. Ele pode ter sido excluído.</p>}
 
       <div className="flex flex-wrap items-center justify-between gap-3 mt-6 mb-6">
         <Tabs
@@ -128,11 +206,13 @@ export const Materials: React.FC = () => {
             { key: 'concluido', label: 'Concluído', count: counts.concluido },
           ]}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <select
             value={subjectFilter}
             onChange={(e) => setSubjectFilter(e.target.value)}
-            className="text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
+            aria-label="Filtrar materiais por disciplina"
+            disabled={subjectsLoading}
+            className="max-w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
             <option value="todas">Todas as disciplinas</option>
             {subjects.map((s) => (
@@ -144,7 +224,8 @@ export const Materials: React.FC = () => {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
+            aria-label="Filtrar materiais por tipo"
+            className="max-w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
             <option value="todas">Todos os tipos</option>
             {MATERIAL_CATEGORIES.map((c) => (
@@ -156,13 +237,13 @@ export const Materials: React.FC = () => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {loading && materials === null ? (
+        <div aria-label="Carregando materiais" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[0, 1, 2].map((i) => (
             <StatCardSkeleton key={i} />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : materials === null ? null : filtered.length === 0 ? (
         <Card padding="lg">
           <EmptyState
             icon={FolderOpen}
@@ -173,7 +254,7 @@ export const Materials: React.FC = () => {
                 : 'Nenhum material corresponde a esses filtros.'
             }
             action={
-              isUnfiltered
+              isUnfiltered && subjects.length > 0 && !subjectsLoading
                 ? {
                     label: 'Novo material',
                     icon: <Plus size={15} />,
@@ -187,14 +268,17 @@ export const Materials: React.FC = () => {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div ref={materialListRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((material, index) => {
             const meta = CATEGORY_META[material.category];
             const Icon = meta.icon;
             return (
               <Card
                 key={material.id}
-                className="animate-fade-in-up flex flex-col"
+                data-material-id={material.id}
+                tabIndex={-1}
+                aria-label={material.title}
+                className={`animate-fade-in-up flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson ${highlightedId === material.id ? 'border-crimson' : ''}`}
                 style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
               >
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -206,19 +290,21 @@ export const Materials: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
+                      disabled={busyIds.has(material.id) || loading || busyIds.size > 0}
                       onClick={() => {
                         setEditing(material);
                         setModalOpen(true);
                       }}
-                      className="text-muted hover:text-ink transition-colors cursor-pointer"
-                      aria-label="Editar"
+                      className="min-h-11 min-w-11 inline-flex items-center justify-center text-muted hover:text-ink transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                      aria-label={`Editar ${material.title}`}
                     >
                       <Pencil size={14} />
                     </button>
                     <button
+                      disabled={busyIds.has(material.id) || loading}
                       onClick={() => onDelete(material.id)}
-                      className="text-muted hover:text-danger transition-colors cursor-pointer"
-                      aria-label="Excluir"
+                      className="min-h-11 min-w-11 inline-flex items-center justify-center text-muted hover:text-danger transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                      aria-label={`Excluir ${material.title}`}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -236,6 +322,8 @@ export const Materials: React.FC = () => {
                 <div className="mt-auto pt-3 flex items-center justify-between gap-2">
                   <select
                     value={material.status}
+                    disabled={busyIds.has(material.id) || loading}
+                    aria-label={`Status de ${material.title}`}
                     onChange={(e) => onChangeStatus(material.id, e.target.value as MaterialStatus)}
                     className="text-xs border border-border rounded-md px-2 py-1.5 bg-surface text-graphite cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
                   >
@@ -266,11 +354,14 @@ export const Materials: React.FC = () => {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         subjects={subjects}
+        subjectsLoading={subjectsLoading}
+        subjectsError={subjectsError}
+        onRetrySubjects={() => setSubjectsRevision(value => value + 1)}
         material={editing}
         defaultSubjectId={subjectFilter !== 'todas' ? subjectFilter : ''}
         onSaved={() => {
           setModalOpen(false);
-          loadMaterials();
+          void loadMaterials();
         }}
       />
     </div>
@@ -281,13 +372,17 @@ const MaterialModal: React.FC<{
   open: boolean;
   onClose: () => void;
   subjects: Subject[];
+  subjectsLoading: boolean;
+  subjectsError: string;
+  onRetrySubjects: () => void;
   material: MaterialWithSubject | null;
   defaultSubjectId: string;
   onSaved: () => void;
-}> = ({ open, onClose, subjects, material, defaultSubjectId, onSaved }) => {
+}> = ({ open, onClose, subjects, subjectsLoading, subjectsError, onRetrySubjects, material, defaultSubjectId, onSaved }) => {
   const isEditing = !!material;
   const { register, handleSubmit, reset } = useForm<MaterialFormValues>();
   const [saving, setSaving] = useState(false);
+  const savingLock = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -305,6 +400,8 @@ const MaterialModal: React.FC<{
   }, [open, material, defaultSubjectId, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
+    if (savingLock.current || subjectsLoading || subjects.length === 0) return;
+    savingLock.current = true;
     setSaving(true);
     const payload = {
       title: values.title,
@@ -325,15 +422,19 @@ const MaterialModal: React.FC<{
     } catch {
       toast.error('Não foi possível salvar o material.');
     } finally {
+      savingLock.current = false;
       setSaving(false);
     }
   });
 
   return (
-    <Modal open={open} onClose={onClose} ariaLabel={isEditing ? 'Editar material' : 'Novo material'} panelClassName="max-w-lg">
+    <Modal open={open} onClose={() => { if (!savingLock.current) onClose(); }} ariaLabel={isEditing ? 'Editar material' : 'Novo material'} panelClassName="max-w-lg">
       <form onSubmit={onSubmit} className="p-6">
         <h2 className="font-serif text-xl font-semibold text-ink mb-5">{isEditing ? 'Editar material' : 'Novo material'}</h2>
-        <div className="space-y-4">
+        {subjectsLoading && <p role="status" className="mb-4 text-sm text-muted">Carregando disciplinas…</p>}
+        {subjectsError && <div role="alert" className="mb-4 text-sm text-danger space-y-2"><p>{subjectsError}</p><Button type="button" variant="outline" size="sm" onClick={onRetrySubjects}>Tentar novamente</Button></div>}
+        {!subjectsLoading && !subjectsError && subjects.length === 0 && <p className="mb-4 text-sm text-graphite">Cadastre uma disciplina antes de adicionar materiais.</p>}
+        <fieldset disabled={saving} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-graphite mb-1.5">Título</label>
             <input
@@ -391,12 +492,12 @@ const MaterialModal: React.FC<{
               className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors resize-none"
             />
           </div>
-        </div>
+        </fieldset>
         <div className="flex justify-end gap-2.5 mt-6 pt-5 border-t border-border">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" disabled={saving} onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" loading={saving}>
+          <Button type="submit" loading={saving} disabled={subjectsLoading || subjects.length === 0}>
             {isEditing ? 'Salvar' : 'Adicionar'}
           </Button>
         </div>

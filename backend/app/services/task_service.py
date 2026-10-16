@@ -4,6 +4,7 @@ from app.models.task import Task
 from app.models.subject import Subject
 from app.models.calendar_event import CalendarEvent
 from app.models.note import Note
+from app.models.academic_record import Assessment
 from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskWithSubject
 from typing import List, Optional
 
@@ -116,6 +117,9 @@ def update_task(db: Session, task_id: int, task_update: TaskUpdate, user_id: int
         db.query(Note).filter(
             Note.task_id == task_id, Note.user_id == user_id, Note.study_session_id.is_(None)
         ).update({Note.subject_id: new_subject_id}, synchronize_session="fetch")
+        # Resultados pertencem à disciplina da avaliação, não à intenção movida.
+        db.query(Assessment).filter(Assessment.task_id == task_id, Assessment.user_id == user_id).update(
+            {Assessment.task_id: None}, synchronize_session="fetch")
     for key, value in update_data.items():
         setattr(db_task, key, value)
 

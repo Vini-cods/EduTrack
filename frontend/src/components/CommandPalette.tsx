@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import apiClient from '../api/client';
 import { Modal } from './ui/Modal';
-import type { Subject, Task } from '../types';
+import { buildCommandSearchIndex, matchesCommandQuery, MAX_SEARCH_QUERY_LENGTH, searchCommandIndex, type CommandSearchData, type SearchKind } from '../lib/commandSearch';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -28,43 +28,69 @@ interface CommandItem {
   id: string;
   label: string;
   hint?: string;
+  description?: string;
   icon: React.ElementType;
   group: string;
   action: () => void;
 }
 
-function normalize(text: string) {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
+const emptyData: CommandSearchData = { subjects: [], tasks: [], notes: [], materials: [] };
+const searchSources = [
+  { key: 'subjects', label: 'disciplinas', path: '/subjects/' },
+  { key: 'tasks', label: 'tarefas', path: '/tasks/' },
+  { key: 'notes', label: 'notas', path: '/notes/' },
+  { key: 'materials', label: 'materiais', path: '/materials/' },
+] as const;
+const searchGroups: Record<SearchKind, { label: string; icon: React.ElementType }> = {
+  subject: { label: 'Disciplinas', icon: BookOpen },
+  task: { label: 'Tarefas', icon: ClipboardList },
+  note: { label: 'Notas de estudo', icon: StickyNote },
+  material: { label: 'Materiais', icon: FileText },
+};
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose }) => {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [data, setData] = useState<CommandSearchData>(emptyData);
+  const [loading, setLoading] = useState(false);
+  const [failedSources, setFailedSources] = useState<string[]>([]);
+  const [revision, setRevision] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const resultId = useId();
 
-  // Busca disciplinas/tarefas uma vez, na primeira vez que o palette abre —
-  // é isso que torna "Pesquisar disciplina/tarefa" uma busca real, e não
-  // apenas um atalho de navegação disfarçado de busca.
   useEffect(() => {
     if (!open) return;
     setQuery('');
     setActiveIndex(0);
-    apiClient.get('/subjects/').then((res) => setSubjects(res.data)).catch(() => {});
-    apiClient.get('/tasks/').then((res) => setTasks(res.data)).catch(() => {});
+    setData(emptyData);
     const t = setTimeout(() => inputRef.current?.focus(), 30);
     return () => clearTimeout(t);
   }, [open]);
 
-  const go = (path: string) => {
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setFailedSources([]);
+    async function load<Key extends keyof CommandSearchData>(key: Key, path: string) {
+      const response = await apiClient.get<CommandSearchData[Key]>(path, { signal: controller.signal, timeout: 15_000 });
+      if (!controller.signal.aborted) setData(previous => ({ ...previous, [key]: response.data }));
+    }
+    // One snapshot per opening/retry. Partial successes remain searchable.
+    Promise.allSettled(searchSources.map(source => load(source.key, source.path))).then(results => {
+      if (controller.signal.aborted) return;
+      setFailedSources(results.flatMap((result, index) => result.status === 'rejected' ? [searchSources[index].label] : []));
+      setLoading(false);
+    });
+    return () => controller.abort();
+  }, [open, revision]);
+
+  const go = useCallback((path: string) => {
     navigate(path);
     onClose();
-  };
+  }, [navigate, onClose]);
 
   const staticCommands: CommandItem[] = useMemo(
     () => [
@@ -74,7 +100,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
       { id: 'nav-study', label: 'Abrir modo de estudo', icon: Timer, group: 'Navegação', action: () => go('/study') },
       { id: 'nav-subjects', label: 'Abrir disciplinas', icon: BookOpen, group: 'Navegação', action: () => go('/subjects') },
       { id: 'nav-materials', label: 'Abrir materiais', icon: FileText, group: 'Navegação', action: () => go('/materials') },
-      { id: 'nav-notes', label: 'Abrir notas', icon: StickyNote, group: 'Navegação', action: () => go('/notes') },
+      { id: 'nav-notes', label: 'Abrir notas de estudo', icon: StickyNote, group: 'Navegação', action: () => go('/notes') },
       { id: 'nav-insights', label: 'Abrir insights', icon: Lightbulb, group: 'Navegação', action: () => go('/insights') },
       { id: 'nav-load', label: 'Ver carga acadêmica', icon: ChartNoAxesCombined, group: 'Navegação', action: () => go('/academic-load') },
       { id: 'nav-settings', label: 'Abrir configurações', icon: Settings, group: 'Navegação', action: () => go('/settings') },
@@ -85,49 +111,32 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
       { id: 'new-material', label: 'Novo material', icon: Plus, group: 'Ações rápidas', action: () => go('/materials?new=1') },
       { id: 'new-note', label: 'Nova nota', icon: Plus, group: 'Ações rápidas', action: () => go('/notes?new=1') },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [go]
   );
 
+  const searchIndex = useMemo(() => buildCommandSearchIndex(data), [data]);
   const results = useMemo<CommandItem[]>(() => {
-    const q = normalize(query.trim());
-    if (!q) return staticCommands;
-
-    const matchedCommands = staticCommands.filter((c) => normalize(c.label).includes(q));
-
-    const matchedSubjects: CommandItem[] = subjects
-      .filter((s) => normalize(s.name).includes(q))
-      .slice(0, 5)
-      .map((s) => ({
-        id: `subject-${s.id}`,
-        label: s.name,
-        hint: 'Disciplina',
-        icon: BookOpen,
-        group: 'Disciplinas',
-        action: () => go(`/subjects/${s.id}`),
-      }));
-
-    const matchedTasks: CommandItem[] = tasks
-      .filter((t) => normalize(t.title).includes(q))
-      .slice(0, 5)
-      .map((t) => ({
-        id: `task-${t.id}`,
-        label: t.title,
-        hint: (t as Task & { subject_name?: string }).subject_name,
-        icon: ClipboardList,
-        group: 'Tarefas',
-        action: () => go(`/tasks?highlight=${t.id}`),
-      }));
-
-    return [...matchedCommands, ...matchedSubjects, ...matchedTasks];
-  }, [query, staticCommands, subjects, tasks]);
+    if (!query.trim()) return staticCommands;
+    const commands = staticCommands.filter(command => matchesCommandQuery(command.label, query));
+    const academic: CommandItem[] = searchCommandIndex(searchIndex, query).map(result => ({
+      ...result,
+      icon: searchGroups[result.kind].icon,
+      group: searchGroups[result.kind].label,
+      action: () => go(result.path),
+    }));
+    return [...commands, ...academic];
+  }, [query, staticCommands, searchIndex, go]);
 
   useEffect(() => setActiveIndex(0), [query]);
+  useEffect(() => setActiveIndex(index => Math.min(index, Math.max(0, results.length - 1))), [results.length]);
+  useEffect(() => {
+    if (open) resultRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [open, activeIndex, results]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, Math.max(0, results.length - 1)));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
@@ -150,7 +159,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
   let flatIndex = -1;
 
   return (
-    <Modal open={open} onClose={onClose} align="top" ariaLabel="Command palette" panelClassName="max-w-xl overflow-hidden">
+    <Modal open={open} onClose={onClose} align="top" ariaLabel="Busca e navegação do EduTrack" panelClassName="max-w-xl overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
         <Search size={18} className="text-muted shrink-0" />
         <input
@@ -158,20 +167,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Pesquisar ou navegar..."
-          aria-label="Pesquisar páginas, disciplinas e tarefas"
-          className="flex-1 bg-transparent outline-none text-ink placeholder:text-muted text-[15px]"
+          maxLength={MAX_SEARCH_QUERY_LENGTH}
+          placeholder="Pesquisar título, conteúdo ou tag…"
+          aria-label="Pesquisar páginas, disciplinas, tarefas, notas e materiais"
+          role="combobox"
+          aria-expanded={open}
+          aria-autocomplete="list"
+          aria-controls={resultId}
+          aria-activedescendant={results[activeIndex] ? resultId + '-' + results[activeIndex].id : undefined}
+          className="flex-1 min-w-0 min-h-11 bg-transparent outline-none text-ink placeholder:text-muted text-[15px]"
         />
         <kbd className="hidden sm:inline text-xs text-muted border border-border rounded px-1.5 py-0.5">Esc</kbd>
       </div>
 
-      <div className="max-h-[60vh] overflow-y-auto py-2">
-        {results.length === 0 ? (
+      {loading && <p role="status" className="px-4 py-2 text-xs text-muted border-b border-border">Carregando disciplinas, tarefas, notas e materiais…</p>}
+      {failedSources.length > 0 && <div role="alert" className="px-4 py-2 border-b border-border text-xs text-graphite flex flex-wrap items-center gap-2"><p className="flex-1 min-w-40">Busca parcial: não foi possível atualizar {failedSources.join(', ')}.</p><button className="text-crimson underline min-h-11 cursor-pointer" onClick={() => setRevision(value => value + 1)}>Tentar novamente</button></div>}
+      <div ref={resultRef} id={resultId} role="listbox" aria-label="Resultados da busca" className="max-h-[50dvh] overflow-y-auto py-2">
+        {results.length === 0 && !loading ? (
           <p className="text-sm text-muted text-center py-8">Nada encontrado para "{query}".</p>
         ) : (
           groups.map(([group, items]) => (
-            <div key={group} className="mb-1">
-              <p className="px-4 pt-2 pb-1 text-xs text-muted">{group}</p>
+            <div key={group} role="group" aria-label={group} className="mb-1">
+              <p aria-hidden="true" className="px-4 pt-2 pb-1 text-xs text-muted">{group}</p>
               {items.map((item) => {
                 flatIndex += 1;
                 const isActive = flatIndex === activeIndex;
@@ -179,15 +196,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
                 return (
                   <button
                     key={item.id}
+                    id={resultId + '-' + item.id}
+                    role="option"
+                    aria-selected={isActive}
+                    data-active={isActive}
                     onMouseEnter={() => setActiveIndex(currentFlatIndex)}
                     onClick={item.action}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors cursor-pointer ${
+                    className={`w-full min-h-11 flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-crimson ${
                       isActive ? 'bg-surface-muted' : ''
                     }`}
                   >
                     <item.icon size={16} className="text-graphite shrink-0" />
-                    <span className="flex-1 text-ink truncate">{item.label}</span>
-                    {item.hint && <span className="text-xs text-muted shrink-0">{item.hint}</span>}
+                    <span className="flex-1 min-w-0"><span className="block text-ink truncate">{item.label}</span>{item.description && <span className="block mt-1 text-xs text-muted truncate">{item.description}</span>}{item.hint && <span className="block mt-1 text-xs text-graphite truncate">{item.hint}</span>}</span>
                     {isActive && <CornerDownLeft size={13} className="text-muted shrink-0" />}
                   </button>
                 );
@@ -196,6 +216,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
           ))
         )}
       </div>
+      <p className="px-4 py-2.5 border-t border-border text-xs text-muted">↑ ↓ para navegar · Enter para abrir · Até 5 resultados por tipo</p>
     </Modal>
   );
 };

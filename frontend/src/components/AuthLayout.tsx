@@ -11,7 +11,7 @@ interface AuthLayoutProps {
   description: string;
   children: ReactNode;
   footer: ReactNode;
-  variant?: 'login' | 'register';
+  variant?: 'login' | 'register' | 'recovery';
 }
 
 export function AuthLayout({ title, description, children, footer, variant = 'login' }: AuthLayoutProps) {
@@ -33,7 +33,7 @@ export function AuthLayout({ title, description, children, footer, variant = 'lo
               <Link to="/register" aria-current={variant === 'register' ? 'page' : undefined}>Criar conta</Link>
             </nav>
             <div className="auth-experience-sheet-heading">
-              <span className="auth-experience-eyebrow">{variant === 'login' ? 'Continue seu percurso' : 'Abra um novo capítulo'}</span>
+              <span className="auth-experience-eyebrow">{variant === 'login' ? 'Continue seu percurso' : variant === 'register' ? 'Abra um novo capítulo' : 'Recupere seu acesso'}</span>
               <h1 id="auth-title">{title}</h1>
               <p>{description}</p>
             </div>

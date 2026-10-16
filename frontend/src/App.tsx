@@ -8,6 +8,7 @@ import { RouteContent } from './components/RouteContent';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 
 const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })));
 const Subjects = lazy(() => import('./pages/Subjects').then(module => ({ default: module.Subjects })));
@@ -33,6 +34,7 @@ const App: React.FC = () => (
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<PrivateRoute />}><Route element={<DashboardLayout />}><Route element={<RouteContent />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/subjects" element={<Subjects />} />

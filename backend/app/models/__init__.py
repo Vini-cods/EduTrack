@@ -7,6 +7,7 @@ from app.models.calendar_event import CalendarEvent, EventCategory
 from app.models.study_session import StudySession, StudySessionStatus
 from app.models.material import Material, MaterialCategory, MaterialStatus
 from app.models.note import Note
+from app.models.academic_record import Assessment, SubjectSyllabus
 
 __all__ = [
     "User",
@@ -20,4 +21,6 @@ __all__ = [
     "MaterialCategory",
     "MaterialStatus",
     "Note",
+    "Assessment",
+    "SubjectSyllabus",
 ]

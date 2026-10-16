@@ -1,20 +1,15 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core.config import settings
-from app.core.security import (
-    create_access_token,
-    create_password_reset_token,
-    verify_password_reset_token,
-    get_password_hash
-)
+from app.core.security import create_access_token
 from app.schemas.user import UserResponse, UserCreate, ForgotPassword, ResetPassword
 from app.schemas.token import Token
-from app.services import auth_service
+from app.services import auth_service, email_service, password_reset_service
 from app.models.user import User
 
 router = APIRouter()
@@ -68,17 +63,28 @@ def read_user_me(
     """Retorna os dados do usuário atual logado."""
     return current_user
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
 def forgot_password(
     forgot_pwd: ForgotPassword,
-    db: Session = Depends(deps.get_db)
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(deps.get_db),
 ) -> Any:
-    """Inicia o processo de recuperação de senha."""
-    user = auth_service.get_user_by_email(db, email=forgot_pwd.email)
-    if user:
-        token = create_password_reset_token(email=user.email)
-        # TODO: Send email with reset instructions
-    return {"msg": "Se o email estiver cadastrado, instruções foram enviadas."}
+    """Recebe um pedido sem revelar a existência ou o estado de uma conta."""
+    try:
+        pending = password_reset_service.prepare_password_reset(
+            db, forgot_pwd.email, request.client.host if request.client else "unknown",
+        )
+    except email_service.EmailServiceUnavailable:
+        raise HTTPException(status_code=503, detail="A recuperação de senha está indisponível no momento. Tente novamente mais tarde.")
+    except password_reset_service.PasswordResetRateLimited as exc:
+        raise HTTPException(
+            status_code=429, detail="Muitos pedidos de recuperação. Aguarde antes de tentar novamente.",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        )
+    if pending is not None:
+        background_tasks.add_task(email_service.send_password_reset_email, pending.recipient, pending.reset_url)
+    return {"msg": "Pedido recebido. Se houver uma conta ativa para este e-mail, você receberá um link para redefinir a senha. Caso não receba, tente novamente em alguns minutos."}
 
 @router.post("/reset-password")
 def reset_password(
@@ -86,16 +92,8 @@ def reset_password(
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """Redefine a senha utilizando um token válido."""
-    email = verify_password_reset_token(token=reset_pwd.token)
-    if not email:
-        raise HTTPException(status_code=400, detail="Token inválido ou expirado")
-    user = auth_service.get_user_by_email(db, email=email)
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="Usuário não encontrado",
-        )
-    user.hashed_password = get_password_hash(reset_pwd.new_password)
-    db.add(user)
-    db.commit()
+    try:
+        password_reset_service.reset_password(db, reset_pwd.token, reset_pwd.new_password)
+    except password_reset_service.InvalidPasswordReset:
+        raise HTTPException(status_code=400, detail="Link inválido, expirado ou já utilizado. Solicite um novo link.")
     return {"msg": "Senha redefinida com sucesso."}

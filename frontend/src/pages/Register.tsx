@@ -9,11 +9,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { AuthLayout } from '../components/AuthLayout';
 import { TextField } from '../components/ui/TextField';
 import { Button } from '../components/ui/Button';
+import { accountPasswordError } from '../lib/password';
 
 const schema = z.object({
   name: z.string().trim().min(3, 'Informe pelo menos 3 caracteres.').max(255),
   email: z.string().trim().email('Informe um e-mail válido.'),
-  password: z.string().min(6, 'Use pelo menos 6 caracteres.'),
+  password: z.string().superRefine((value, context) => {
+    const message = accountPasswordError(value);
+    if (message) context.addIssue({ code: 'custom', message });
+  }),
   confirmation: z.string(),
 }).refine(data => data.password === data.confirmation, { message: 'As senhas devem ser iguais.', path: ['confirmation'] });
 type RegisterData = z.infer<typeof schema>;

@@ -29,7 +29,26 @@ export function Notes() {
   const [deleting, setDeleting] = useState<Note | null>(null);
   const [removing, setRemoving] = useState(false);
   const deletionLock = useRef(false);
-  const selected = notes.find(note => note.id === selectedId) || notes[0];
+  const articleRef = useRef<HTMLElement>(null);
+  const requestedId = Number(params.get('highlight'));
+  const hasRequestedNote = Number.isSafeInteger(requestedId) && requestedId > 0;
+  const selected = notes.find(note => note.id === selectedId) || (hasRequestedNote ? undefined : notes[0]);
+
+  useEffect(() => {
+    const id = Number(params.get('highlight'));
+    if (!Number.isSafeInteger(id) || id <= 0) return;
+    setSelectedId(id);
+    setQuery('');
+    setSubjectFilter('');
+  }, [params]);
+
+  useEffect(() => {
+    if (!hasRequestedNote || loading || selected?.id !== requestedId) return;
+    articleRef.current?.focus({ preventScroll: true });
+    articleRef.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    const next = new URLSearchParams(params); next.delete('highlight');
+    setParams(next, { replace: true });
+  }, [hasRequestedNote, requestedId, loading, selected, params, setParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,7 +96,7 @@ export function Notes() {
                 <p className="text-xs text-graphite px-4 py-3 border-b border-border">{notes.length} {notes.length === 1 ? 'nota' : 'notas'}</p>
                 {notes.map(note => <button key={note.id} onClick={() => setSelectedId(note.id)} aria-current={selected?.id === note.id ? 'true' : undefined} className={`w-full text-left px-4 py-4 border-b border-border last:border-b-0 transition-colors hover:bg-surface-muted ${selected?.id === note.id ? 'bg-crimson-soft border-l-2 border-l-crimson' : 'border-l-2 border-l-transparent'}`}><span className="block text-sm font-semibold text-ink break-words">{note.title}</span><span className="block mt-1 text-xs text-graphite">{note.subject_name || 'Sem disciplina'}</span><span className="block mt-2 text-xs text-graphite leading-relaxed break-words">{noteExcerpt(note.content, 100) || 'Sem conteúdo'}</span>{note.tags.length > 0 && <span className="block mt-2 text-xs text-crimson break-words">{note.tags.slice(0, 3).map(tag => '#' + tag).join(' ')}{note.tags.length > 3 ? ' +' + (note.tags.length - 3) : ''}</span>}</button>)}
               </nav>
-              {selected && <article className="p-5 sm:p-8 min-w-0">
+              {selected ? <article ref={articleRef} tabIndex={-1} aria-label={selected.title} className="p-5 sm:p-8 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-crimson">
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-5"><div className="min-w-0"><p className="text-xs text-graphite mb-2">Atualizada em {new Date(selected.updated_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</p><h2 className="font-serif text-2xl text-ink break-words">{selected.title}</h2></div><div className="flex gap-1"><Button variant="ghost" size="sm" disabled={!context} aria-label="Editar nota" onClick={() => setEditor({ note: selected })} className="min-h-11" icon={<Pencil size={16} />}>Editar</Button><Button variant="ghost" size="sm" aria-label="Excluir nota" onClick={() => setDeleting(selected)} className="text-danger min-h-11" icon={<Trash2 size={16} />} /></div></div>
                 <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-graphite border-b border-border pb-4 mb-6">
                   {selected.subject_id && <Link className="inline-flex items-center gap-1.5 hover:text-crimson" to={`/subjects/${selected.subject_id}`}><BookOpen size={14} />{selected.subject_name || 'Disciplina'}</Link>}
@@ -87,7 +106,7 @@ export function Notes() {
                 </div>
                 <div className="whitespace-pre-wrap break-words leading-relaxed text-ink text-[15px] min-h-40">{selected.content || <span className="text-graphite">Esta nota ainda não tem conteúdo.</span>}</div>
                 {selected.tags.length > 0 && <div className="flex flex-wrap gap-2 mt-8 pt-5 border-t border-border">{selected.tags.map(tag => <button key={tag} onClick={() => setQuery(tag)} className="px-2 py-1 text-xs rounded bg-surface-muted text-graphite hover:text-crimson">#{tag}</button>)}</div>}
-              </article>}
+              </article> : <p role="status" className="p-5 sm:p-8 text-sm text-graphite">A nota solicitada não está disponível. Escolha outra nota na lista.</p>}
             </div>
           )}
         </div>

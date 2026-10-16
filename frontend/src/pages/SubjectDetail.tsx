@@ -19,6 +19,7 @@ import { TaskFormModal } from '../components/tasks/TaskFormModal';
 import { SubjectFormModal } from '../components/subjects/SubjectFormModal';
 import { SubjectDeleteModal } from '../components/subjects/SubjectDeleteModal';
 import { ClassSchedule } from '../components/subjects/ClassSchedule';
+import { SubjectAcademicRecords } from '../components/subjects/SubjectAcademicRecords';
 
 const statusConfig: Record<TaskStatus, { label: string; tone: 'warning' | 'navy' | 'success' }> = {
   pendente: { label: 'Pendente', tone: 'warning' },
@@ -92,6 +93,7 @@ export const SubjectDetail: React.FC = () => {
     <div className="mt-5 flex justify-between text-sm text-graphite"><span>{completedCount} de {tasks.length} tarefas concluídas</span><span className="font-semibold text-ink">{Math.round(progress)}%</span></div><ProgressBar value={progress} className="mt-2" size="sm" />
 
     <ClassSchedule subjects={allSubjects} subjectId={subject.id} />
+    <SubjectAcademicRecords subjectId={subject.id} tasks={tasks} />
 
     <Card padding="none" className="mt-6">
       <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between flex-wrap gap-3"><h2 className="font-serif text-xl font-semibold text-ink">Tarefas ({tasks.length})</h2><Button size="sm" className="min-h-11" icon={<Plus size={16} />} onClick={() => { setEditingTask(null); setTaskFormOpen(true); }}>Nova tarefa</Button></div>

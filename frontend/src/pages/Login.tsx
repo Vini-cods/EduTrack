@@ -9,8 +9,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { AuthLayout } from '../components/AuthLayout';
 import { TextField } from '../components/ui/TextField';
 import { Button } from '../components/ui/Button';
+import { accountPasswordError } from '../lib/password';
 
-const schema = z.object({ email: z.string().trim().email('Informe um e-mail válido.'), password: z.string().min(6, 'Use pelo menos 6 caracteres.') });
+const schema = z.object({
+  email: z.string().trim().email('Informe um e-mail válido.'),
+  password: z.string().superRefine((value, context) => {
+    const message = accountPasswordError(value);
+    if (message) context.addIssue({ code: 'custom', message });
+  }),
+});
 type LoginData = z.infer<typeof schema>;
 export const Login = () => {
   const { login } = useAuth();

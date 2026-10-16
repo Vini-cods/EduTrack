@@ -49,3 +49,5 @@ class Subject(Base):
     # seus materiais também, coerente com o ondelete="CASCADE" da FK.
     materials = relationship("Material", back_populates="subject", cascade="all, delete-orphan")
     notes = relationship("Note", back_populates="subject")
+    syllabus = relationship("SubjectSyllabus", back_populates="subject", uselist=False, cascade="all, delete-orphan")
+    assessments = relationship("Assessment", back_populates="subject", cascade="all, delete-orphan")
