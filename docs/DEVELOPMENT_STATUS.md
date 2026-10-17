@@ -1,12 +1,12 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 16/10/2026.
+Atualizado em 17/10/2026.
 
 ## Entrega atual
 
 - Símbolo da logo refinado, aplicado sem nome/slogan à marca, autenticação e favicon, com versões crimson, grafite e para fundo escuro. Imagem original preservada.
-- Login e cadastro compartilham uma experiência editorial com prévia interativa Organizar/Focar/Evoluir, navegação por teclado e SVG motion discreto. O formulário aparece primeiro em telas menores; a prévia é explicitamente ilustrativa e não acessa dados acadêmicos.
-- Autenticação mantém validação acessível, confirmação de senha e proteção contra envios simultâneos. Login valida após interação, avisa sobre Caps Lock e mantém foco no primeiro campo inválido. Botões de mostrar senha possuem alvo de 44 px.
+- Login e cadastro usam um portal centralizado inspirado na estrutura visual de https://ead.sp.senai.br/: marca no topo, formulário compacto, ajuda de acesso, tema e fundo geométrico em SVG original. A identidade e o símbolo são do EduTrack; os elementos gráficos não carregam recursos externos. Recuperação e redefinição compartilham o mesmo layout.
+- Login tem duas etapas: e-mail e senha. Cadastro separa nome/e-mail de senha/confirmação. Avançar valida somente os campos da etapa localmente; a autenticação/criação ocorre no envio final. Voltar preserva valores e posiciona o foco no campo inicial. Validação acessível, Caps Lock no login, confirmação de senha e bloqueio de envios simultâneos foram preservados; mostrar senha mantém alvo de 44 px.
 - Recuperação de senha: pedido genérico, SMTP configurável, limite de pedidos e redefinição por link com expiração/finalidade e uso único. As telas distinguem pedido recebido de indisponibilidade/rede; sem SMTP configurado, o serviço retorna 503. Consulte `docs/PASSWORD_RECOVERY.md`.
 - Temas claro/escuro/sistema em toda a interface. Preferência local, sincronização entre abas e aplicação antes da renderização.
 - Dashboard responde “o que fazer hoje”: tarefas priorizadas, agenda, próximos prazos, progresso, carga semanal e gráficos de estudo agendado/realizado e carga diária.
@@ -27,6 +27,8 @@ Atualizado em 16/10/2026.
 - Study Planner e Focus anteriores preservados, inclusive separação entre intenção, agenda e execução, timer por deadline e reconciliação de mutações.
 
 ## Decisões e limites
+
+O fundo de acesso usa SVG/CSS e deslocamento por ponteiro agendado sob demanda, sem WebGL ou novas dependências. O movimento é desativado por prefers-reduced-motion; o deslocamento também exige ponteiro preciso. A primeira etapa não verifica se o e-mail existe e não adiciona suporte a CPF. Cada etapa remonta seus campos com identidade própria para evitar reutilização de inputs entre nome/e-mail e senha; os valores permanecem no React Hook Form.
 
 Task representa intenção/objetivo; CalendarEvent reserva horário; StudySession registra execução; Note guarda conhecimento. Não há uma segunda entidade copiando prioridade, prazo, estimativa ou disciplina da tarefa.
 
@@ -81,9 +83,9 @@ Backend, no diretório backend:
 
 As validações automatizadas usam bancos isolados. Validação integrada em 16/10: 175 testes backend e 71 frontend aprovados; type-check e build de produção aprovados. As migrações reais foram aplicadas após backup e teste em cópia, com SHA256 confirmando os valores anteriores preservados e PRAGMA foreign_key_check sem erros. Durante a evolução, foram realizadas outras 27 verificações HTTP de disciplinas, grade, calendário, carga, duplicatas e preservação.
 
-A homologação no navegador utiliza SQLite temporário e portas 8001/5174, separadas do banco real. Nesta entrega foram conferidos: salvamento do plano de ensino, criação de avaliação com nota zero e média parcial recalculada, busca por conteúdo de Notes/Materials com navegação por teclado e destaque do resultado, tema escuro e formulário de avaliação sem transbordamento horizontal em 320/390 px. Com a API de teste desligada, Materials encerrou o carregamento e exibiu erro/nova tentativa. Recuperação sem SMTP exibiu indisponibilidade real; link de redefinição sem token orientou a pedir outro. Não foram alteradas credenciais reais nem enviado e-mail externo.
+A homologação acadêmica de 16/10 no navegador utilizou SQLite temporário e portas 8001/5174, separadas do banco real. Nesta entrega foram conferidos: salvamento do plano de ensino, criação de avaliação com nota zero e média parcial recalculada, busca por conteúdo de Notes/Materials com navegação por teclado e destaque do resultado, tema escuro e formulário de avaliação sem transbordamento horizontal em 320/390 px. Com a API de teste desligada, Materials encerrou o carregamento e exibiu erro/nova tentativa. Recuperação sem SMTP exibiu indisponibilidade real; link de redefinição sem token orientou a pedir outro. Não foram alteradas credenciais reais nem enviado e-mail externo.
 
-A experiência de entrada recebeu uma validação adicional em 15/10: 50 testes frontend, type-check e build de produção aprovados. Login/cadastro e prévia foram conferidos no navegador, incluindo troca de tema, setas nas abas, mensagens de validação e ausência de transbordamento horizontal em larguras de 320, 390 e 768 px. Reduced motion foi revisado no CSS; a preferência do sistema não foi alterada. Nenhuma API de autenticação foi modificada nesta etapa.
+O portal de acesso recebeu validação adicional em 17/10: 71 testes frontend, type-check e build de produção aprovados. No navegador foram conferidos: e-mail inválido impedindo avanço, Enter e foco entre etapas, retorno preservando nome/e-mail, mostrar/ocultar senha no login, erro de credenciais inválidas, validação de senha no cadastro, ajuda com Escape e restauração de foco, temas claro/escuro e ausência de transbordamento horizontal em 320/390 px. A recuperação manteve o layout compartilhado. Reduced motion foi revisado no CSS e no guard do ponteiro; a preferência do sistema não foi alterada. Não foram criadas contas, alteradas credenciais, enviadas mensagens externas ou modificadas APIs/banco nesta etapa. As verificações do login usaram dados sintéticos inválidos no serviço local.
 
 ## Próximas evoluções
 
