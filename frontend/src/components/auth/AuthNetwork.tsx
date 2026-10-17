@@ -38,20 +38,20 @@ export function AuthNetwork() {
       context.clearRect(0, 0, width, height);
       context.strokeStyle = color;
       context.fillStyle = color;
-      context.lineWidth = .8;
+      context.lineWidth = 1;
       for (let i = 0; i < particles.length; i++) {
         const a = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
           const b = particles[j];
           const separation = Math.hypot(a.x - b.x, a.y - b.y);
           if (separation >= distance) continue;
-          context.globalAlpha = (1 - separation / distance) * .38;
+          context.globalAlpha = (1 - separation / distance) * .68;
           context.beginPath();
           context.moveTo(a.x, a.y);
           context.lineTo(b.x, b.y);
           context.stroke();
         }
-        context.globalAlpha = .72;
+        context.globalAlpha = .96;
         context.beginPath();
         context.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
         context.fill();

@@ -93,6 +93,8 @@ O refinamento visual de 17/10 adicionou marca completa e animação das conexõe
 
 A revisão seguinte da animação, em 17/10, substituiu os traços sobre caminhos fixos por partículas flutuantes e conexões graduais por proximidade, após comparação visual do movimento no portal SENAI. TypeScript e build de produção aprovados. A rede foi conferida em quadros sucessivos nos dois temas e o Canvas acompanhou os viewports de 320/390 px sem transbordamento horizontal. Pausa por visibilidade, quadro estático em reduced motion, limpeza dos observers/handlers e limitação de delta foram revisadas no código; não foi alterada a preferência do sistema. Logo, layout, formulários e APIs permaneceram intactos.
 
+O contraste da rede foi reforçado em 17/10: crimson mais saturado por tema, pontos com opacidade 0,96 e conexões com opacidade máxima 0,68/espessura de 1 px, mantendo o desaparecimento gradual por distância. Conferência visual claro/escuro e TypeScript/build aprovados; movimento, densidade e limites de desempenho preservados.
+
 ## Próximas evoluções
 
 Prioridades confirmadas pelo código:
