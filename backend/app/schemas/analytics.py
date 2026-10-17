@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AnalyticsPeriod(BaseModel):
@@ -55,6 +55,56 @@ class AnalyticsInsight(BaseModel):
     tone: Literal["info", "warning", "success"]
     title: str
     description: str
+    action: Literal["planner", "tasks", "focus", "academic_load"] | None = None
+
+
+class StudyComparison(BaseModel):
+    available: bool = False
+    elapsed_days: int = 0
+    current_start_date: date | None = None
+    current_end_date: date | None = None
+    previous_start_date: date | None = None
+    previous_end_date: date | None = None
+    current_studied_minutes: float = 0
+    previous_studied_minutes: float = 0
+    delta_minutes: float = 0
+    change_percent: float | None = None
+
+
+class StudyWeekday(BaseModel):
+    weekday: int
+    studied_minutes: float = 0
+    completed_sessions: int = 0
+
+
+class StudyHour(BaseModel):
+    hour: int
+    studied_minutes: float = 0
+    completed_sessions: int = 0
+
+
+class SessionPatterns(BaseModel):
+    completed_sessions: int = 0
+    average_session_minutes: float = 0
+    median_session_minutes: float = 0
+    longest_session_minutes: float = 0
+    current_streak_days: int = 0
+    longest_streak_days: int = 0
+    weekday_distribution: list[StudyWeekday] = Field(default_factory=list)
+    hourly_distribution: list[StudyHour] = Field(default_factory=list)
+
+
+class PlanningDiagnostics(BaseModel):
+    overloaded_days: int = 0
+    excess_load_minutes: float = 0
+    peak_date: date | None = None
+    peak_load_percent: float = 0
+    remaining_task_minutes: float = 0
+    covered_task_minutes: float = 0
+    planning_coverage_percent: float | None = None
+    estimated_tasks: int = 0
+    tasks_without_estimates: int = 0
+    undated_tasks: int = 0
 
 
 class AnalyticsResponse(BaseModel):
@@ -64,3 +114,6 @@ class AnalyticsResponse(BaseModel):
     subjects: list[AnalyticsSubject]
     insights: list[AnalyticsInsight]
     methodology: list[str]
+    comparison: StudyComparison = Field(default_factory=StudyComparison)
+    session_patterns: SessionPatterns = Field(default_factory=SessionPatterns)
+    planning_diagnostics: PlanningDiagnostics = Field(default_factory=PlanningDiagnostics)

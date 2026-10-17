@@ -17,6 +17,7 @@ from app.models.study_session import StudySession, StudySessionStatus
 from app.models.subject import Subject
 from app.models.task import Task
 from app.schemas.analytics import AnalyticsDay, AnalyticsInsight, AnalyticsPeriod, AnalyticsResponse, AnalyticsSubject, AnalyticsSummary, LoadMetrics
+from app.services.analytics_metrics import StudyRecord, compare_study, planning_diagnostics, session_patterns
 
 MAX_PERIOD_DAYS = 93
 MINUTE_FIELDS = ("studied_minutes", "planned_study_minutes", "scheduled_minutes", "unallocated_task_minutes")
@@ -71,25 +72,25 @@ def _insights(summary: AnalyticsSummary, days: list[AnalyticsDay]) -> list[Analy
     if overloaded:
         peak = max(overloaded, key=lambda day: day.total_load_minutes)
         result.append(AnalyticsInsight(id="overload", tone="warning", title="Redistribua a carga",
-            description=f"{len(overloaded)} dia(s) superam sua capacidade. Em {peak.date.strftime('%d/%m')}, a carga prevista é de {peak.total_load_minutes / 60:.1f} h."))
+            description=f"{len(overloaded)} dia(s) superam sua capacidade. Em {peak.date.strftime('%d/%m')}, a carga prevista é de {peak.total_load_minutes / 60:.1f} h.", action="academic_load"))
     if summary.overdue_tasks:
         result.append(AnalyticsInsight(id="overdue", tone="warning", title="Prazos precisam de atenção",
-            description=f"Você tem {summary.overdue_tasks} tarefa(s) aberta(s) com prazo vencido. Revise a prioridade e renegocie o que não couber."))
+            description=f"Você tem {summary.overdue_tasks} tarefa(s) aberta(s) com prazo vencido. Revise a prioridade e renegocie o que não couber.", action="tasks"))
     if summary.unallocated_task_minutes:
         result.append(AnalyticsInsight(id="unallocated", tone="info", title="Transforme estimativas em blocos",
-            description=f"Há {summary.unallocated_task_minutes / 60:.1f} h estimada(s) no período ainda sem um bloco de estudo futuro que as cubra."))
+            description=f"Há {summary.unallocated_task_minutes / 60:.1f} h estimada(s) no período ainda sem um bloco de estudo futuro que as cubra.", action="planner"))
     if summary.unknown_estimate_tasks:
         result.append(AnalyticsInsight(id="missing-estimates", tone="info", title="Complete as estimativas",
-            description=f"{summary.unknown_estimate_tasks} tarefa(s) aberta(s) não têm duração estimada. A carga exibida pode estar abaixo do esforço necessário."))
+            description=f"{summary.unknown_estimate_tasks} tarefa(s) aberta(s) não têm duração estimada. A carga exibida pode estar abaixo do esforço necessário.", action="tasks"))
     if summary.undated_tasks:
         result.append(AnalyticsInsight(id="undated", tone="info", title="Dê um prazo às tarefas",
-            description=f"{summary.undated_tasks} tarefa(s) aberta(s) sem prazo não entram na distribuição diária de estimativas."))
+            description=f"{summary.undated_tasks} tarefa(s) aberta(s) sem prazo não entram na distribuição diária de estimativas.", action="tasks"))
     if summary.completed_sessions:
         result.append(AnalyticsInsight(id="study-record", tone="success", title="Seu estudo está registrado",
-            description=f"{summary.studied_minutes / 60:.1f} h em {summary.completed_sessions} sessão(ões) concluída(s), distribuída(s) em {summary.active_days} dia(s)."))
+            description=f"{summary.studied_minutes / 60:.1f} h em {summary.completed_sessions} sessão(ões) concluída(s), distribuída(s) em {summary.active_days} dia(s).", action="focus"))
     elif not result:
         result.append(AnalyticsInsight(id="start-recording", tone="info", title="Comece a construir seu histórico",
-            description="Finalize uma sessão no Focus e cadastre os próximos prazos para acompanhar estudo realizado e carga prevista."))
+            description="Finalize uma sessão no Focus e cadastre os próximos prazos para acompanhar estudo realizado e carga prevista.", action="focus"))
     return result
 
 
@@ -129,12 +130,19 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
     actual_task_minutes: dict[int, float] = defaultdict(float)
     allocated_task_minutes: dict[int, float] = defaultdict(float)
     summary = AnalyticsSummary(capacity_minutes=daily_capacity * day_count)
+    study_records: list[StudyRecord] = []
+    task_effort: list[tuple[float, float]] = []
 
     for session in sessions:
+        # Uma execução datada no futuro não é evidência de estudo realizado.
+        if _utc(session.started_at) > now or (session.ended_at is not None and _utc(session.ended_at) > now):
+            continue
         minutes = max(0, session.accumulated_seconds) / 60
+        local_start = _utc(session.started_at).astimezone(zone)
+        study_records.append(StudyRecord(started_at=local_start, minutes=minutes))
         if session.task_id is not None:
             actual_task_minutes[session.task_id] += minutes
-        session_day = _utc(session.started_at).astimezone(zone).date()
+        session_day = local_start.date()
         if session_day in days:
             days[session_day].studied_minutes += minutes
             subject_metrics(session.subject_id).studied_minutes += minutes
@@ -174,7 +182,10 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
             continue
         load_day = max(task.due_date, today)
         if load_day in days:
-            remainder = max(0, task.estimated_hours * 60 - actual_task_minutes[task.id] - allocated_task_minutes[task.id])
+            remaining_effort = max(0, task.estimated_hours * 60 - actual_task_minutes[task.id])
+            covered_effort = min(remaining_effort, allocated_task_minutes[task.id])
+            task_effort.append((remaining_effort, covered_effort))
+            remainder = remaining_effort - covered_effort
             days[load_day].unallocated_task_minutes += remainder
             subject_metrics(task.subject_id).unallocated_task_minutes += remainder
 
@@ -193,12 +204,24 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
         _finish_load(subject)
         subject.completion_rate = _rate(subject.tasks_completed, subject.tasks_due)
 
+    comparison = compare_study(study_records, start_date, end_date, today)
+    patterns = session_patterns(study_records, start_date, end_date, today)
+    diagnostics = planning_diagnostics(list(days.values()), task_effort, summary.unknown_estimate_tasks, summary.undated_tasks)
+    insights = _insights(summary, list(days.values()))
+    if comparison.available and comparison.previous_studied_minutes > 0 and comparison.delta_minutes < 0:
+        insights.append(AnalyticsInsight(
+            id="study-comparison", tone="info", title="Revisite seu plano de estudo",
+            description=f"Foram {abs(comparison.delta_minutes):.0f} min a menos de estudo registrado em {comparison.elapsed_days} dia(s), comparados ao mesmo trecho do período anterior. Confira se os próximos blocos cabem na sua rotina.",
+            action="planner",
+        ))
+
     return AnalyticsResponse(
         period=AnalyticsPeriod(start_date=start_date, end_date=end_date, timezone=timezone_name,
                                daily_capacity_hours=daily_capacity_hours, as_of=now),
         summary=summary, daily=list(days.values()),
+        comparison=comparison, session_patterns=patterns, planning_diagnostics=diagnostics,
         subjects=sorted(by_subject.values(), key=lambda item: (-item.total_load_minutes, -item.studied_minutes, item.subject_name.casefold())),
-        insights=_insights(summary, list(days.values())),
+        insights=insights,
         methodology=[
             "Estudo realizado soma apenas sessões concluídas, sem pausas, atribuído ao dia local de início. O modelo atual não registra segmentos para repartir sessões entre dias.",
             "Conclusão mede o estado atual das tarefas cujo prazo está no período. Não representa conclusões históricas: tarefas ainda não possuem data de conclusão.",
@@ -206,5 +229,9 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
             "A estimativa não alocada entra no dia do prazo; tarefas atrasadas entram em hoje. Eventos sem horário final não recebem uma duração presumida.",
             "Consistência é a proporção de dias já transcorridos do período com estudo concluído. Dias futuros não entram no denominador.",
             "A agenda existente usa horário local; sessões de execução usam UTC, convertido para o fuso selecionado. Capacidade diária é uma referência configurável, não uma recomendação de saúde.",
+            "Comparação usa apenas estudo: o período anterior começa uma janela selecionada antes, comparando a mesma quantidade de dias já transcorridos. O dia atual é parcial; os demais dias comparados são completos. Datas dos dois trechos são explícitas e base zero não gera variação percentual.",
+            "Padrões usam sessões concluídas até o instante da consulta, agrupadas pelo início local. Sessões com início ou conclusão no futuro são desconsideradas. Distribuições não medem eficiência nem recomendam horários.",
+            "Sequências contam dias consecutivos com estudo positivo dentro do intervalo. A sequência atual termina no último dia transcorrido; quando esse dia é hoje sem estudo, pode terminar ontem. A maior sequência também é limitada ao intervalo.",
+            "Cobertura considera esforço restante das tarefas abertas com prazo distribuído no intervalo, descontando estudo registrado; blocos futuros vinculados são limitados ao restante de cada tarefa, mesmo fora da janela. Sem esforço restante, a cobertura é indisponível. Estimativas ausentes e tarefas sem prazo referem-se a todo o backlog aberto.",
         ],
     )
