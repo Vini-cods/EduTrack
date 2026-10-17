@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { Logo } from './Logo';
 import { ThemeToggle } from './ThemeToggle';
 import { AuthBackdrop } from './auth/AuthBackdrop';
 import { AuthHelp } from './auth/AuthHelp';
+import { AuthBrand } from './auth/AuthBrand';
 import './auth/AuthLayout.css';
 
 interface AuthLayoutProps {
@@ -21,10 +20,6 @@ export function AuthLayout({ title, description, children, footer, variant = 'lo
       <AuthBackdrop />
       <a href="#auth-content" className="auth-portal-skip">Ir para o acesso</a>
       <header className="auth-portal-header">
-        <Link to="/login" aria-label="EduTrack, início" className="auth-portal-brand">
-          <Logo size="lg" />
-        </Link>
-        <span className="auth-portal-caption">Seu portal<br />acadêmico</span>
         <div className="auth-portal-tools">
           <ThemeToggle />
           <AuthHelp />
@@ -32,14 +27,17 @@ export function AuthLayout({ title, description, children, footer, variant = 'lo
       </header>
 
       <main id="auth-content" tabIndex={-1} className="auth-portal-main">
-        <section className="auth-portal-panel" aria-labelledby="auth-title">
-          <div className="auth-portal-heading">
-            <h1 id="auth-title">{title}</h1>
-            <p>{description}</p>
-          </div>
-          {children}
-          <div className="auth-portal-account-link">{footer}</div>
-        </section>
+        <div className="auth-portal-access">
+          <AuthBrand />
+          <section className="auth-portal-panel" aria-labelledby="auth-title">
+            <div className="auth-portal-heading">
+              <h1 id="auth-title">{title}</h1>
+              <p>{description}</p>
+            </div>
+            {children}
+            <div className="auth-portal-account-link">{footer}</div>
+          </section>
+        </div>
       </main>
 
       <footer className="auth-portal-footer">

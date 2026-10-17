@@ -28,18 +28,7 @@
 .auth-portal-header {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 26px clamp(20px, 3.5vw, 56px);
-}
-.auth-portal-brand { display: inline-flex; flex-shrink: 0; border-radius: 4px; }
-.auth-portal-caption {
-  border-left: 1px solid var(--color-border-strong);
-  padding-left: 18px;
-  color: var(--color-graphite);
-  font-size: 13px;
-  line-height: 1.3;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  padding: 18px clamp(20px, 3.5vw, 56px);
 }
 .auth-portal-tools { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .auth-portal-tools > button:first-child { background: var(--auth-panel); border: 1px solid var(--auth-panel-border); border-radius: 24px; }
@@ -64,9 +53,10 @@
   flex: 1;
   display: grid;
   place-items: center;
-  padding: 25px 20px 40px;
+  padding: 8px 20px 32px;
   outline: none;
 }
+.auth-portal-access { display: grid; gap: 24px; width: 100%; max-width: 440px; }
 .auth-portal-panel {
   width: 100%;
   max-width: 440px;
@@ -111,13 +101,12 @@
 @keyframes auth-panel-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes auth-cube-drift { from { transform: translateY(-4px); } to { transform: translateY(5px); } }
 @media (max-width: 640px) {
-  .auth-portal-header { gap: 12px; padding: 20px; }
-  .auth-portal-header .brand-symbol { width: 48px !important; height: 48px !important; }
-  .auth-portal-caption { display: none; }
+  .auth-portal-header { padding: 14px 20px; }
   .auth-portal-tools { gap: 8px; }
   .auth-portal-help { padding: 9px 12px; }
   .auth-portal-panel { padding: 28px 26px 24px; border-color: var(--color-border); }
-  .auth-portal-main { padding-top: 16px; padding-bottom: 28px; }
+  .auth-portal-main { padding-top: 4px; padding-bottom: 24px; }
+  .auth-portal-access { gap: 18px; }
   .auth-portal-heading h1 { font-size: 25px; }
   .auth-backdrop-corner { width: 180px; opacity: .65; }
 }
