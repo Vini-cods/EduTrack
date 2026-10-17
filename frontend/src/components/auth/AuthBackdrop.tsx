@@ -1,8 +1,14 @@
 import { useEffect, useId, useRef } from 'react';
+import './AuthNetwork.css';
 
 const leftCubes = [[45, 335, 2.2], [185, 390, 2.5], [310, 345, 1.1], [245, 220, 1.25], [80, 160, .8], [180, 80, .55]];
 const rightCubes = [[325, 335, 2.1], [170, 320, 1.5], [245, 165, .85], [50, 400, 1.7], [345, 95, .55]];
-const nodes = [[60, 220], [170, 150], [275, 195], [350, 130], [110, 450], [240, 410], [300, 540], [1210, 300], [1310, 370], [1270, 485], [1110, 510], [1010, 730], [1080, 800], [1130, 680]];
+const connections = [
+  { points: [[60, 220], [170, 150], [275, 195], [350, 130]], duration: 12, delay: -3 },
+  { points: [[110, 450], [240, 410], [300, 540]], duration: 10, delay: -7 },
+  { points: [[1210, 300], [1310, 370], [1270, 485], [1110, 510]], duration: 14, delay: -5 },
+  { points: [[1010, 730], [1080, 800], [1130, 680]], duration: 11, delay: -1 },
+] as const;
 const stars = [[35, 100], [195, 62], [380, 280], [280, 370], [90, 720], [400, 680], [550, 100], [690, 160], [840, 60], [1010, 120], [1170, 195], [1360, 70], [1360, 250], [1160, 370], [1100, 600], [970, 875], [750, 810], [500, 850], [920, 370], [540, 520], [810, 650], [340, 90], [1250, 860], [1410, 440]];
 
 function Cube({ x, y, scale, index }: { x: number; y: number; scale: number; index: number }) {
@@ -12,6 +18,31 @@ function Cube({ x, y, scale, index }: { x: number; y: number; scale: number; ind
       <polygon className="auth-backdrop-cube-left" points="-32,-17 0,0 0,38 -32,21" />
       <polygon className="auth-backdrop-cube-right" points="0,0 32,-17 32,21 0,38" />
     </g>
+  </g>;
+}
+
+function AuthNetwork() {
+  return <g className="auth-backdrop-network">
+    {connections.map(({ points, duration, delay }, connectionIndex) => {
+      const path = 'M' + points.map(([x, y]) => `${x} ${y}`).join(' L');
+      return <g key={connectionIndex}>
+        <path className="auth-network-rail" d={path} />
+        <path
+          className="auth-network-signal"
+          d={path}
+          pathLength={100}
+          style={{ animationDuration: `${duration}s`, animationDelay: `${delay}s` }}
+        />
+        {points.map(([x, y], nodeIndex) => <circle
+          key={nodeIndex}
+          className="auth-network-node"
+          cx={x}
+          cy={y}
+          r={nodeIndex === 0 ? 3 : 2}
+          style={{ animationDelay: `${delay - nodeIndex * 1.4}s` }}
+        />)}
+      </g>;
+    })}
   </g>;
 }
 
@@ -61,10 +92,7 @@ export function AuthBackdrop() {
         <rect x="520" y="0" width="225" height="100" /><rect x="0" y="300" width="145" height="165" /><rect x="1305" y="175" width="135" height="155" />
       </g>
       <g className="auth-backdrop-stars">{stars.map(([x, y], index) => <circle key={index} cx={x} cy={y} r={index % 3 === 0 ? 2 : 1.2} />)}</g>
-      <g className="auth-backdrop-network">
-        <path d="M60 220 170 150 275 195 350 130 M110 450 240 410 300 540 M1210 300 1310 370 1270 485 1110 510 M1010 730 1080 800 1130 680" />
-        {nodes.map(([x, y], index) => <circle key={index} cx={x} cy={y} r={index % 4 === 0 ? 3 : 2} />)}
-      </g>
+      <AuthNetwork />
       <Cube x={1240} y={105} scale={.7} index={11} />
     </svg>
     <svg className="auth-backdrop-corner auth-backdrop-corner-left" viewBox="0 0 380 400" focusable="false">

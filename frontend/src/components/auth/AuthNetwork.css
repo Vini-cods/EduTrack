@@ -1,0 +1,51 @@
+.auth-backdrop-network {
+  --auth-network-rail-opacity: .28;
+  color: var(--color-crimson);
+}
+
+:root[data-theme='dark'] .auth-backdrop-network {
+  --auth-network-rail-opacity: .32;
+}
+
+.auth-backdrop-network path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.auth-backdrop-network .auth-network-rail {
+  stroke-width: .8;
+  opacity: var(--auth-network-rail-opacity);
+}
+
+/* Normalized path lengths keep the light moving evenly on every connection. */
+.auth-backdrop-network .auth-network-signal {
+  stroke-width: 1.6;
+  stroke-dasharray: 12 88;
+  stroke-dashoffset: 100;
+  opacity: .8;
+  animation: auth-network-travel 12s linear infinite;
+}
+
+.auth-backdrop-network .auth-network-node {
+  fill: currentColor;
+  opacity: .55;
+  animation: auth-network-pulse 6s ease-in-out infinite;
+}
+
+@keyframes auth-network-travel {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes auth-network-pulse {
+  0%, 100% { opacity: .38; }
+  50% { opacity: .8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-backdrop-network .auth-network-signal { display: none; animation: none; }
+  .auth-backdrop-network .auth-network-node { animation: none; opacity: .55; }
+}

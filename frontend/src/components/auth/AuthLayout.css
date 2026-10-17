@@ -89,8 +89,6 @@
 .auth-backdrop-matrix { opacity: .24; }
 .auth-backdrop-scene defs circle { fill: var(--auth-star); }
 .auth-backdrop-stars { fill: var(--auth-star); opacity: .26; }
-.auth-backdrop-network path { fill: none; stroke: var(--color-crimson); stroke-width: .8; opacity: .23; }
-.auth-backdrop-network circle { fill: var(--color-crimson); opacity: .45; }
 .auth-backdrop-cube { animation: auth-cube-drift 13s ease-in-out infinite alternate; }
 .auth-backdrop-cube-top { fill: var(--auth-cube-top); }
 .auth-backdrop-cube-left { fill: var(--auth-cube-left); }
