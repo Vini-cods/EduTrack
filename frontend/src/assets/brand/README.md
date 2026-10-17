@@ -2,6 +2,8 @@
 
 Refinamento do monograma enviado pelo usuário, com o E, livro e seta. Nome e slogan removidos dos arquivos selecionados.
 
+As páginas de entrada usam uma composição completa em `components/auth/AuthBrand.tsx`: a mesma máscara do símbolo, o nome EDUTRACK e o slogan “Seu dashboard de estudos”. O texto é renderizado pela interface para permanecer nítido em diferentes densidades de tela; o JPEG não é esticado nem recebe um fundo branco. A composição é crimson no tema claro e off-white no escuro, restrita a `AuthLayout`. A interface interna e o favicon continuam usando somente o símbolo.
+
 - edutrack-symbol-crimson.png: símbolo crimson em fundo transparente.
 - edutrack-symbol-graphite.png: alternativa grafite/navy em fundo transparente.
 - edutrack-symbol-dark-background.png: símbolo claro sobre fundo navy, para apresentação.
