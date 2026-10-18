@@ -1,0 +1,22 @@
+[Unit]
+Description=EduTrack recovery delivery worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=edutrack
+Group=edutrack
+WorkingDirectory=/opt/edutrack/backend
+EnvironmentFile=/etc/edutrack/backend.env
+ExecStart=/opt/edutrack/backend/venv/bin/python -m app.workers.email_worker
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/edutrack
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

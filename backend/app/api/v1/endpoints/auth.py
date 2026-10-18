@@ -1,6 +1,6 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -67,12 +67,11 @@ def read_user_me(
 def forgot_password(
     forgot_pwd: ForgotPassword,
     request: Request,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """Recebe um pedido sem revelar a existência ou o estado de uma conta."""
     try:
-        pending = password_reset_service.prepare_password_reset(
+        password_reset_service.prepare_password_reset(
             db, forgot_pwd.email, request.client.host if request.client else "unknown",
         )
     except email_service.EmailServiceUnavailable:
@@ -82,8 +81,6 @@ def forgot_password(
             status_code=429, detail="Muitos pedidos de recuperação. Aguarde antes de tentar novamente.",
             headers={"Retry-After": str(exc.retry_after_seconds)},
         )
-    if pending is not None:
-        background_tasks.add_task(email_service.send_password_reset_email, pending.recipient, pending.reset_url)
     return {"msg": "Pedido recebido. Se houver uma conta ativa para este e-mail, você receberá um link para redefinir a senha. Caso não receba, tente novamente em alguns minutos."}
 
 @router.post("/reset-password")

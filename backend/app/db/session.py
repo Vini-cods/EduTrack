@@ -10,7 +10,7 @@ if settings.DB_ENGINE == "sqlite":
     # para funcionar com o modelo de concorrência do FastAPI.
     engine = create_engine(
         settings.DATABASE_URL,
-        connect_args={"check_same_thread": False},
+        connect_args={"check_same_thread": False, "timeout": 30},
         echo=False,
     )
 else:

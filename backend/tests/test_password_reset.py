@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from jose import jwt
 from pydantic import ValidationError
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from app.core.config import Settings, settings
 from app.core.security import (
@@ -16,7 +16,8 @@ from app.core.security import (
     get_password_hash, password_fingerprint,
 )
 from app.models.user import User
-from app.services import email_service, password_reset_service
+from app.models.recovery_delivery import RecoveryRateEvent
+from app.services import email_service, password_reset_service, recovery_delivery_service, recovery_rate_limit
 from tests.conftest import TestingSessionLocal
 
 
@@ -79,6 +80,8 @@ def test_forgot_has_same_response_for_existing_unknown_inactive_and_link_is_trus
     assert {response.status_code for response in responses} == {202}
     assert responses[0].json() == responses[1].json() == responses[2].json()
     assert "enviadas" not in responses[0].json()["msg"]
+    assert configured_mail == []  # A API persistiu, mas não executou SMTP.
+    assert recovery_delivery_service.deliver_one(TestingSessionLocal)
     assert len(configured_mail) == 1
     recipient, url = configured_mail[0]
     assert recipient == reset_users["owner"]["email"]
@@ -184,39 +187,39 @@ def test_atomic_update_rejects_token_if_credential_changes_after_read(reset_user
 
 
 def test_recovery_cooldown_uniform_for_unknown_and_known_and_expires(client, reset_users, configured_mail, monkeypatch):
-    clock = [10_000.0]
-    monkeypatch.setattr(password_reset_service, "monotonic", lambda: clock[0])
+    clock = [datetime.now(timezone.utc)]
+    monkeypatch.setattr(recovery_rate_limit, "utcnow", lambda: clock[0])
     for email in (reset_users["owner"]["email"], "unknown@example.com"):
         assert client.post("/api/v1/auth/forgot-password", json={"email": email}).status_code == 202
         response = client.post("/api/v1/auth/forgot-password", json={"email": email})
         assert response.status_code == 429 and response.headers["Retry-After"] == "60"
-    clock[0] += 60
+    clock[0] += timedelta(seconds=60)
     assert client.post("/api/v1/auth/forgot-password", json={"email": reset_users["owner"]["email"]}).status_code == 202
-    limiter = password_reset_service._rate_limiter
-    assert all("example.com" not in key and "testclient" not in key for key in limiter._buckets)
+    with TestingSessionLocal() as db:
+        keys = db.scalars(select(RecoveryRateEvent.bucket)).all()
+    assert keys and all("example.com" not in key and "testclient" not in key for key in keys)
 
 
-def test_recovery_email_window_ip_limit_and_cache_bound(monkeypatch):
-    clock = [10_000.0]
-    monkeypatch.setattr(password_reset_service, "monotonic", lambda: clock[0])
+def test_recovery_email_window_and_ip_limit_survive_limiter_instances(monkeypatch):
+    clock = [datetime.now(timezone.utc)]
+    monkeypatch.setattr(recovery_rate_limit, "utcnow", lambda: clock[0])
     monkeypatch.setattr(settings, "RESET_REQUEST_EMAIL_LIMIT", 2)
     monkeypatch.setattr(settings, "RESET_REQUEST_IP_LIMIT", 3)
     limiter = password_reset_service.RecoveryRateLimiter()
-    limiter.check("a@example.com", "127.0.0.1")
-    clock[0] += 60
-    limiter.check("a@example.com", "127.0.0.1")
-    clock[0] += 60
-    with pytest.raises(password_reset_service.PasswordResetRateLimited):
-        limiter.check("a@example.com", "127.0.0.1")
-    limiter.check("b@example.com", "127.0.0.1")
-    with pytest.raises(password_reset_service.PasswordResetRateLimited):
-        limiter.check("c@example.com", "127.0.0.1")
-    clock[0] += settings.RESET_REQUEST_WINDOW_SECONDS
-    limiter.check("a@example.com", "127.0.0.1")
-    assert len(limiter._buckets) == 2
-    monkeypatch.setattr(limiter, "MAX_BUCKETS", 2)
-    with pytest.raises(password_reset_service.PasswordResetRateLimited):
-        limiter.check("d@example.com", "127.0.0.2")
+    with TestingSessionLocal() as db:
+        limiter.check(db, "a@example.com", "127.0.0.1")
+        clock[0] += timedelta(seconds=60)
+        limiter.check(db, "a@example.com", "127.0.0.1")
+        clock[0] += timedelta(seconds=60)
+        limiter = password_reset_service.RecoveryRateLimiter()  # outro processo/instância
+        with pytest.raises(password_reset_service.PasswordResetRateLimited):
+            limiter.check(db, "a@example.com", "127.0.0.1")
+        limiter.check(db, "b@example.com", "127.0.0.1")
+        with pytest.raises(password_reset_service.PasswordResetRateLimited):
+            limiter.check(db, "c@example.com", "127.0.0.1")
+        clock[0] += timedelta(seconds=settings.RESET_REQUEST_WINDOW_SECONDS)
+        limiter.check(db, "a@example.com", "127.0.0.1")
+        assert len(db.scalars(select(RecoveryRateEvent)).all()) == 2
 
 
 @pytest.mark.parametrize("implicit_ssl", [False, True])
@@ -248,7 +251,8 @@ def test_smtp_failure_never_changes_public_acceptance_or_logs_personal_data(clie
     known = client.post("/api/v1/auth/forgot-password", json={"email": reset_users["owner"]["email"]})
     unknown = client.post("/api/v1/auth/forgot-password", json={"email": "unknown@example.com"})
     assert known.status_code == unknown.status_code == 202 and known.json() == unknown.json()
-    assert "Falha no transporte" in caplog.text
+    assert recovery_delivery_service.deliver_one(TestingSessionLocal)
+    assert "outcome=pending" in caplog.text
     assert "sensitive-server-detail" not in caplog.text and "owner@example.com" not in caplog.text and "token-value" not in caplog.text
 
 

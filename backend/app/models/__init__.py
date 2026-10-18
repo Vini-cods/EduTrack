@@ -10,6 +10,7 @@ from app.models.material import Material, MaterialCategory, MaterialStatus
 from app.models.note import Note
 from app.models.academic_record import Assessment, SubjectSyllabus
 from app.models.activity_history import TaskStatusEvent, StudySegment
+from app.models.recovery_delivery import RecoveryDelivery, RecoveryRateEvent, RecoveryRateLock
 
 __all__ = [
     "User",
@@ -28,4 +29,7 @@ __all__ = [
     "SubjectSyllabus",
     "TaskStatusEvent",
     "StudySegment",
+    "RecoveryDelivery",
+    "RecoveryRateEvent",
+    "RecoveryRateLock",
 ]
