@@ -12,10 +12,10 @@ Este README é a referência principal de instalação, arquitetura e uso técni
 | Disciplinas | Cadastro, edição e exclusão; professor, carga horária, período, cronograma de aulas, plano de ensino e avaliações. |
 | Tarefas | Prioridade, prazo, estimativa, status, filtros e ações de edição/exclusão. Tarefas com data aparecem como prazos no calendário. |
 | Calendário | Visões mês/semana/dia, eventos por categoria, vínculos com tarefas e recorrência; exclusão de uma ocorrência ou da série. |
-| Study Planner e Focus | Objetivos, reserva de blocos, Pomodoro, pausa/retomada e histórico de sessões com tempo ativo. |
-| Notes e Materials | Anotações de texto simples com tags e contexto; referências de estudo por URL, disciplina e status. |
+| Study Planner e Focus | Objetivos, reserva de blocos, Pomodoro, pausa/retomada e segmentos ativos para distribuir estudo entre dias. |
+| Notes e Materials | Anotações de texto simples com tags e contexto; referências de estudo por URL, disciplina e status; busca sem acentos e paginação no servidor. |
 | Academic Load e Insights | Comparação de intervalos equivalentes, calendário de consistência, padrões de sessões por dia/hora, média/mediana, cobertura do planejamento, sobrecarga, distribuição por disciplina e exportação CSV. |
-| Navegação e aparência | Command Palette (`Ctrl+K`/`Cmd+K`) com busca; temas claro/escuro/sistema, layout responsivo e respeito a `prefers-reduced-motion`. |
+| Navegação e aparência | Command Palette (`Ctrl+K`/`Cmd+K`) com busca; temas claro/escuro/sistema, capacidade e configurações Pomodoro persistidos por conta; layout responsivo e respeito a `prefers-reduced-motion`. |
 | Acesso | Login e cadastro em etapas; autenticação JWT e recuperação de senha por e-mail quando SMTP estiver configurado. |
 
 ## Stack e requisitos
@@ -136,19 +136,21 @@ As páginas internas carregam por rota. Regras compartilhadas ficam nos serviço
 | `Task` | Intenção ou entrega: prioridade, estimativa, prazo e estado. |
 | `CalendarEvent` | Reserva de horário ou compromisso; pode referenciar disciplina/tarefa. |
 | `StudySession` | Execução: tempo ativo acumulado, segmento atual e estado da sessão. |
+| `StudySegment` / `TaskStatusEvent` | Intervalos ativos fechados e mudanças de status com instante UTC; histórico prospectivo, sem inferir datas antigas. |
+| `UserPreferences` | Tema, capacidade diária e configurações Pomodoro do proprietário. |
 | `Note` | Conhecimento em texto simples, com vínculos opcionais e tags. |
 | `Material` | Referência de estudo obrigatoriamente vinculada a uma disciplina. |
 | `SubjectSyllabus` / `Assessment` | Plano de ensino e resultados de avaliações por disciplina. |
 
 Planejamento, agenda e execução permanecem separados: uma sessão de estudo finalizada não conclui automaticamente sua tarefa. Os prazos exibidos no calendário são uma **projeção de Task**, sem criar uma segunda cópia no banco. A recorrência materializa ocorrências com `recurrence_group_id`, preservando consultas simples e permitindo excluir uma ocorrência ou a série.
 
-O timer calcula tempo a partir do segmento ativo e dos segundos acumulados, sem depender de contadores incrementados pela UI. Só uma sessão ativa/pausada por usuário é permitida. A rede de partículas do acesso é isolada em Canvas 2D, com limite de densidade/DPR/quadros, pausa em aba oculta e quadro estático quando há preferência por movimento reduzido.
+O timer calcula tempo a partir do segmento ativo e dos segundos acumulados, sem depender de contadores incrementados pela UI. Só uma sessão ativa/pausada por usuário é permitida. Fechar um segmento e mudar o estado é uma transação com atualização condicional, evitando dupla contabilização em disputas entre abas. Conclusões e reaberturas de tarefas também são registradas atomicamente; reenviar o mesmo estado não cria outro evento. Excluir uma tarefa/sessão remove seus eventos/segmentos correspondentes. A rede de partículas do acesso é isolada em Canvas 2D, com limite de densidade/DPR/quadros, pausa em aba oculta e quadro estático quando há preferência por movimento reduzido.
 
 Ao excluir uma disciplina, suas tarefas, materiais, plano e avaliações são removidos; eventos, sessões e Notes são preservados sem os vínculos removidos. Excluir uma tarefa preserva eventos, sessões, Notes e resultados de avaliação, desvinculando a tarefa. O modelo, as constraints e os detalhes dos campos estão em [backend/app/models](backend/app/models) e nas migrations, evitando manter dicionários manuais divergentes.
 
 ## API e autenticação
 
-O contrato completo de rotas, parâmetros, schemas e respostas é gerado pelo FastAPI no [Swagger local](http://localhost:8000/docs). Os grupos publicados incluem `auth`, `subjects`, `academic-records`, `tasks`, `dashboard`, `calendar-events`, `study-sessions`, `materials`, `notes` e `analytics`.
+O contrato completo de rotas, parâmetros, schemas e respostas é gerado pelo FastAPI no [Swagger local](http://localhost:8000/docs). Os grupos publicados incluem `auth`, `subjects`, `academic-records`, `tasks`, `dashboard`, `calendar-events`, `study-sessions`, `materials`, `notes`, `analytics` e `preferences`. Swagger/OpenAPI públicos ficam desabilitados em produção.
 
 `POST /api/v1/auth/login` recebe formulário `application/x-www-form-urlencoded`, com `username` representando o e-mail e `password`; retorna um JWT Bearer. Cadastro, pedido de recuperação e redefinição são públicos. As demais operações acadêmicas exigem autenticação e filtram os dados pelo proprietário. Recurso inexistente ou de outro usuário retorna `404`; token inválido, `401`; conflito de estado, `409`; erro de validação, `422`.
 
@@ -173,14 +175,20 @@ Após mudanças de interface, confira também teclado/foco, loading/erro/vazio, 
 ## Metodologia e limites atuais
 
 - A carga acadêmica soma compromissos com duração e esforço estimado ainda não coberto por estudo realizado ou blocos futuros vinculados. Tarefas sem prazo/estimativa são sinalizadas; o valor exibido não representa esforço que nunca foi informado.
-- Analytics usa os registros do usuário e o fuso IANA informado. Eventos do calendário representam hora civil local; sessões usam UTC. O tempo concluído é atribuído ao dia de início da sessão porque não existe histórico de segmentos por dia. Não há `completed_at` nas tarefas para reconstruir uma série histórica de conclusões.
+- Analytics usa o fuso IANA informado. Eventos do calendário representam hora civil local; sessões usam UTC. Novos segmentos ativos são repartidos à meia-noite local, descontando pausas e respeitando mudanças de horário. Minutos legados sem intervalos conhecidos ficam no dia de início e são identificados como aproximados. `completed_at` e eventos de status passam a ser registrados; tarefas antigas concluídas mantêm data desconhecida. A taxa de entregas pelo prazo continua separada do histórico de conclusões/reaberturas, inclusive de tarefas sem prazo.
 - As médias de avaliações usam notas informadas normalizadas em 0–10 e ponderadas pelos pesos, com cobertura dos pesos das avaliações que já receberam nota. São médias parciais de acompanhamento, sem representar regras oficiais de aprovação ou recuperação.
-- Tema, capacidade e preferências locais do Pomodoro não sincronizam entre dispositivos. Se o navegador for suspenso, a sessão no servidor continua ativa até receber a pausa/finalização.
-- Notes usa texto simples. Materials armazena URLs/referências, sem upload. A Command Palette busca um snapshot das listas disponíveis por abertura/nova tentativa e limita os resultados exibidos por tipo; a busca ainda não é paginada no servidor.
+- Tema, capacidade e configurações Pomodoro são carregados da conta ao entrar/recarregar e salvos por PATCH parcial, com erro/retry e cache isolado por usuário. Não há atualização em tempo real entre dispositivos. O tema anônimo e o estado executivo do timer permanecem locais; configurações globais antigas não são importadas sem proprietário conhecido. Se o navegador for suspenso, a sessão no servidor continua ativa até receber a pausa/finalização.
+- Notes usa texto simples. Materials armazena URLs/referências, sem upload. As páginas usam 20 registros e filtros no servidor; `/notes/page` e `/materials/page` aceitam até 50 registros. A Palette busca até 5 resultados de Notes/Materials por termo, transferindo apenas resumo das notas; disciplinas/tarefas continuam em snapshot por abertura. A busca Unicode sem acentos é por substring e ainda varre os registros do proprietário: não é um índice full-text. Endpoints antigos de listas continuam compatíveis.
 - A grade de aulas materializa até 260 ocorrências em uma janela de até 366 dias. Edição altera uma ocorrência; para substituir a grade, remova a série e cadastre outra. Feriados são ajustados manualmente.
-- SMTP precisa ser configurado e homologado para entrega real. O envio em background não tem fila/retry persistente e o rate limit é por processo. Esses pontos, HTTPS, gestão de segredos, backups e validação de infraestrutura fazem parte da preparação para produção.
+- Recuperação usa outbox persistente, worker separado, retry e rate limit compartilhado no banco. Foi validada com SMTP local; provedor/remetente/domínio reais ainda precisam de configuração. A entrega é pelo menos uma vez, e aceitação SMTP não comprova chegada à caixa de entrada. Consulte os limites e comandos no [guia operacional](docs/PASSWORD_RECOVERY.md).
 
-O roadmap prioriza sincronização de preferências, histórico temporal mais detalhado, busca no servidor, regras institucionais de avaliações e ampliação de acessibilidade/QA. O escopo atualizado está no [estado de desenvolvimento](docs/DEVELOPMENT_STATUS.md#próximas-evoluções).
+## Preparar produção sem publicar
+
+Os modelos em `backend/deploy` incluem proxy HTTPS/Caddy, serviços separados de API/worker e configuração de logs. `ENVIRONMENT=production` valida segredo, HTTPS/CORS, hosts explícitos e SMTP com TLS; não reutilize credenciais locais nem exponha Uvicorn diretamente. `/health/live` verifica o processo e `/health/ready` verifica banco/schema operacional. A configuração e as limitações de monitoramento estão no [guia operacional](docs/PASSWORD_RECOVERY.md#produção-e-monitoramento). Os exemplos não foram instalados nem publicados.
+
+O utilitário `backend/scripts/sqlite_backup.py` permite `backup`, `verify` e `restore` para destino novo, usando snapshot online do SQLite, manifesto SHA-256 e verificação de integridade. Veja os [comandos e ensaio de restauração](docs/PASSWORD_RECOVERY.md#backup-sqlite-e-ensaio-de-restauração). Backups, agendamento, retenção e armazenamento externo precisam ser configurados no host escolhido; não ficam no Git.
+
+As próximas evoluções incluem homologar a infraestrutura escolhida, aprofundar QA/acessibilidade e, conforme necessidade de produto, regras institucionais de avaliações ou índice full-text. O escopo atualizado está no [estado de desenvolvimento](docs/DEVELOPMENT_STATUS.md#próximas-evoluções).
 
 ## Solução de problemas
 
