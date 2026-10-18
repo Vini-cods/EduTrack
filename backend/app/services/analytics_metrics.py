@@ -55,7 +55,8 @@ def _streaks(active_days: set[date], start: date, end: date, today: date) -> tup
     return current, longest
 
 
-def session_patterns(records: list[StudyRecord], start: date, end: date, today: date) -> SessionPatterns:
+def session_patterns(records: list[StudyRecord], start: date, end: date, today: date,
+                     distributed_active_days: set[date] | None = None) -> SessionPatterns:
     selected = [record for record in records if start <= record.started_at.date() <= min(end, today)]
     weekdays = [StudyWeekday(weekday=index) for index in range(7)]
     hours = [StudyHour(hour=index) for index in range(24)]
@@ -67,7 +68,7 @@ def session_patterns(records: list[StudyRecord], start: date, end: date, today: 
     for bucket in (*weekdays, *hours):
         bucket.studied_minutes = round(bucket.studied_minutes, 2)
     durations = [record.minutes for record in selected]
-    active_days = {record.started_at.date() for record in selected if record.minutes > 0}
+    active_days = distributed_active_days if distributed_active_days is not None else {record.started_at.date() for record in selected if record.minutes > 0}
     current, longest = _streaks(active_days, start, end, today)
     return SessionPatterns(
         completed_sessions=len(selected), average_session_minutes=round(sum(durations) / len(durations), 2) if durations else 0,

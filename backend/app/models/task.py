@@ -30,6 +30,7 @@ class Task(Base):
     # (TaskPriority em schemas/task.py), coluna aqui é só string simples.
     priority: Mapped[str] = mapped_column(String(20), nullable=False, default="media")
     estimated_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -52,3 +53,4 @@ class Task(Base):
     study_sessions = relationship("StudySession", back_populates="task")
     notes = relationship("Note", back_populates="task")
     assessments = relationship("Assessment", back_populates="task")
+    status_events = relationship("TaskStatusEvent", cascade="all, delete-orphan")

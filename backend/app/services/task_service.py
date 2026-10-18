@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import case
+from sqlalchemy import case, update
+from datetime import datetime, timezone
+from app.models.activity_history import TaskStatusEvent
 from app.models.task import Task
 from app.models.subject import Subject
 from app.models.calendar_event import CalendarEvent
@@ -7,6 +9,28 @@ from app.models.note import Note
 from app.models.academic_record import Assessment
 from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskWithSubject
 from typing import List, Optional
+
+
+class TaskStateConflict(ValueError):
+    pass
+
+
+def _change_status(db: Session, task: Task, new_status: str) -> None:
+    old_status = task.status
+    if old_status == new_status:
+        return
+    now = datetime.now(timezone.utc)
+    changed = db.execute(update(Task).where(
+        Task.id == task.id, Task.user_id == task.user_id, Task.status == old_status,
+        Task.updated_at == task.updated_at,
+    ).values(status=new_status, completed_at=now if new_status == "concluida" else None,
+             updated_at=now).execution_options(synchronize_session=False))
+    if changed.rowcount != 1:
+        db.rollback()
+        raise TaskStateConflict("A tarefa mudou em outra requisição. Atualize a lista e tente novamente.")
+    db.add(TaskStatusEvent(user_id=task.user_id, task_id=task.id, from_status=old_status,
+                           to_status=new_status, occurred_at=now))
+    db.expire(task, ["status", "completed_at", "updated_at"])
 
 def get_tasks_by_subject(db: Session, subject_id: int, user_id: int, skip: int = 0, limit: int = 100) -> List[Task]:
     """
@@ -51,6 +75,7 @@ def get_tasks_for_user(db: Session, user_id: int) -> List[TaskWithSubject]:
                 status=task.status,
                 priority=task.priority,
                 estimated_hours=task.estimated_hours,
+                completed_at=task.completed_at,
                 subject_id=task.subject_id,
                 created_at=task.created_at,
                 updated_at=task.updated_at,
@@ -86,9 +111,13 @@ def create_task(db: Session, task: TaskCreate, user_id: int) -> Optional[Task]:
         priority=task.priority,
         estimated_hours=task.estimated_hours,
         subject_id=task.subject_id,
-        user_id=user_id
+        user_id=user_id,
+        completed_at=datetime.now(timezone.utc) if task.status == "concluida" else None,
     )
     db.add(db_task)
+    db.flush()
+    db.add(TaskStatusEvent(user_id=user_id, task_id=db_task.id, from_status=None,
+                           to_status=task.status, occurred_at=db_task.completed_at or db_task.created_at))
     db.commit()
     db.refresh(db_task)
     return db_task
@@ -120,6 +149,8 @@ def update_task(db: Session, task_id: int, task_update: TaskUpdate, user_id: int
         # Resultados pertencem à disciplina da avaliação, não à intenção movida.
         db.query(Assessment).filter(Assessment.task_id == task_id, Assessment.user_id == user_id).update(
             {Assessment.task_id: None}, synchronize_session="fetch")
+    if "status" in update_data:
+        _change_status(db, db_task, update_data.pop("status"))
     for key, value in update_data.items():
         setattr(db_task, key, value)
 
@@ -135,7 +166,7 @@ def update_task_status(db: Session, task_id: int, status_update: TaskStatusUpdat
     if not db_task:
         return None
 
-    db_task.status = status_update.status
+    _change_status(db, db_task, status_update.status)
     db.commit()
     db.refresh(db_task)
     return db_task

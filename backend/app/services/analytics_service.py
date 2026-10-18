@@ -16,6 +16,8 @@ from app.models.calendar_event import CalendarEvent, EventCategory
 from app.models.study_session import StudySession, StudySessionStatus
 from app.models.subject import Subject
 from app.models.task import Task
+from app.models.activity_history import StudySegment, TaskStatusEvent
+from app.services.activity_history import distribute_session
 from app.schemas.analytics import AnalyticsDay, AnalyticsInsight, AnalyticsPeriod, AnalyticsResponse, AnalyticsSubject, AnalyticsSummary, LoadMetrics
 from app.services.analytics_metrics import StudyRecord, compare_study, planning_diagnostics, session_patterns
 
@@ -121,16 +123,21 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
             return by_subject[None]
         return by_subject[subject_id]
 
-    # Quatro consultas de dados, independentemente do número de disciplinas.
+    # Consultas em lote, independentemente do número de disciplinas/sessões.
     # Todas filtram o proprietário; o histórico completo cobre estimativas
     # restantes mesmo quando parte da execução aconteceu antes do período.
     tasks = db.query(Task).filter(Task.user_id == user_id).all()
     events = db.query(CalendarEvent).filter(CalendarEvent.user_id == user_id).all()
     sessions = db.query(StudySession).filter(StudySession.user_id == user_id, StudySession.status == StudySessionStatus.CONCLUIDA).all()
+    segments_by_session: dict[int, list[StudySegment]] = defaultdict(list)
+    for segment in db.query(StudySegment).filter(StudySegment.user_id == user_id).all():
+        segments_by_session[segment.session_id].append(segment)
+    status_events = db.query(TaskStatusEvent).filter(TaskStatusEvent.user_id == user_id).all()
     actual_task_minutes: dict[int, float] = defaultdict(float)
     allocated_task_minutes: dict[int, float] = defaultdict(float)
     summary = AnalyticsSummary(capacity_minutes=daily_capacity * day_count)
     study_records: list[StudyRecord] = []
+    distributed_records: list[StudyRecord] = []
     task_effort: list[tuple[float, float]] = []
 
     for session in sessions:
@@ -140,13 +147,30 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
         minutes = max(0, session.accumulated_seconds) / 60
         local_start = _utc(session.started_at).astimezone(zone)
         study_records.append(StudyRecord(started_at=local_start, minutes=minutes))
+        portions, legacy_minutes = distribute_session(session, segments_by_session[session.id], zone)
+        distributed_records.extend(portions)
         if session.task_id is not None:
             actual_task_minutes[session.task_id] += minutes
         session_day = local_start.date()
         if session_day in days:
-            days[session_day].studied_minutes += minutes
-            subject_metrics(session.subject_id).studied_minutes += minutes
+            summary.legacy_studied_minutes += legacy_minutes
+        if any(portion.started_at.date() in days for portion in portions) or (not minutes and session_day in days):
             summary.completed_sessions += 1
+        for portion in portions:
+            if portion.started_at.date() in days:
+                days[portion.started_at.date()].studied_minutes += portion.minutes
+                subject_metrics(session.subject_id).studied_minutes += portion.minutes
+
+    for event in status_events:
+        if _utc(event.occurred_at) > now:
+            continue
+        event_day = _utc(event.occurred_at).astimezone(zone).date()
+        if event_day not in days:
+            continue
+        if event.to_status == "concluida":
+            days[event_day].completion_events += 1
+        elif event.from_status == "concluida":
+            days[event_day].reopened_events += 1
 
     for event in events:
         for event_day, minutes in _event_minutes_by_day(event, start_date, end_date, zone):
@@ -192,7 +216,7 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
     for day in days.values():
         _finish_load(day)
         day.load_percent = _rate(day.total_load_minutes, day.capacity_minutes)
-        for field in (*MINUTE_FIELDS, "tasks_due", "tasks_completed"):
+        for field in (*MINUTE_FIELDS, "tasks_due", "tasks_completed", "completion_events", "reopened_events"):
             setattr(summary, field, getattr(summary, field) + getattr(day, field))
     _finish_load(summary)
     summary.active_days = sum(day.studied_minutes > 0 for day in days.values())
@@ -204,8 +228,10 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
         _finish_load(subject)
         subject.completion_rate = _rate(subject.tasks_completed, subject.tasks_due)
 
-    comparison = compare_study(study_records, start_date, end_date, today)
-    patterns = session_patterns(study_records, start_date, end_date, today)
+    summary.legacy_studied_minutes = round(summary.legacy_studied_minutes, 2)
+    comparison = compare_study(distributed_records, start_date, end_date, today)
+    patterns = session_patterns(study_records, start_date, end_date, today,
+                                {day.date for day in days.values() if day.studied_minutes > 0})
     diagnostics = planning_diagnostics(list(days.values()), task_effort, summary.unknown_estimate_tasks, summary.undated_tasks)
     insights = _insights(summary, list(days.values()))
     if comparison.available and comparison.previous_studied_minutes > 0 and comparison.delta_minutes < 0:
@@ -223,8 +249,8 @@ def get_analytics(db: Session, user_id: int, start_date: date, end_date: date,
         subjects=sorted(by_subject.values(), key=lambda item: (-item.total_load_minutes, -item.studied_minutes, item.subject_name.casefold())),
         insights=insights,
         methodology=[
-            "Estudo realizado soma apenas sessões concluídas, sem pausas, atribuído ao dia local de início. O modelo atual não registra segmentos para repartir sessões entre dias.",
-            "Conclusão mede o estado atual das tarefas cujo prazo está no período. Não representa conclusões históricas: tarefas ainda não possuem data de conclusão.",
+            "Estudo realizado soma sessões concluídas, sem pausas. Novos segmentos ativos são repartidos à meia-noite no fuso selecionado; minutos legados sem intervalos conhecidos permanecem no dia local de início e são identificados como aproximados.",
+            "Entregas concluídas mede o estado atual das tarefas com prazo no período. O histórico separado conta eventos de conclusão e reabertura na data real, inclusive tarefas sem prazo. Reabrir e concluir de novo gera outra conclusão; exclusão da tarefa remove seus eventos. Registros anteriores à atualização não recebem datas inventadas.",
             "Carga prevista soma a duração dos eventos com a estimativa restante das tarefas abertas, descontando estudo concluído e blocos futuros vinculados. Estimativas sem prazo não são distribuídas.",
             "A estimativa não alocada entra no dia do prazo; tarefas atrasadas entram em hoje. Eventos sem horário final não recebem uma duração presumida.",
             "Consistência é a proporção de dias já transcorridos do período com estudo concluído. Dias futuros não entram no denominador.",

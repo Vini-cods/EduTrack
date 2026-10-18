@@ -10,8 +10,7 @@ Separação conceitual (ver CONTEXTO do projeto):
     não reclassifica retroativamente o tempo efetivamente estudado.
 
 Decisão de arquitetura — rastreamento de tempo com pausas:
-Em vez de gravar um evento por pausa/retomada (log de eventos), a sessão
-guarda só dois números que juntos dão o tempo ativo em qualquer momento:
+A sessão guarda dois números que dão o tempo ativo em qualquer momento:
   `accumulated_seconds`  — segundos ativos já "fechados" (de segmentos
                             anteriores, ou o valor final ao concluir).
   `segment_started_at`   — início do segmento ativo atual; None quando
@@ -20,7 +19,9 @@ Tempo ativo agora = accumulated_seconds + (agora - segment_started_at),
 quando em_andamento; ou só accumulated_seconds quando pausada/concluída
 (já "congelado"). Isso é suficiente para pause/resume/stop e sobrevive a
 reload de página (o cliente busca o estado real no servidor), sem precisar
-de uma tabela de eventos separada.
+de consultar o histórico. Ao fechar cada segmento, StudySegment preserva
+seu intervalo para distribuir o tempo entre dias nos analytics. Pausas
+não criam tempo estudado. Registros legados permanecem sem intervalos inferidos.
 
 Os ciclos de Pomodoro (foco vs. pausa) são um conceito só do cliente: uma
 pausa de Pomodoro simplesmente aciona o mesmo pause/resume desta sessão —
@@ -98,6 +99,7 @@ class StudySession(Base):
     subject = relationship("Subject", back_populates="study_sessions")
     task = relationship("Task", back_populates="study_sessions")
     notes = relationship("Note", back_populates="study_session")
+    segments = relationship("StudySegment", cascade="all, delete-orphan")
 
     @property
     def elapsed_seconds(self) -> int:

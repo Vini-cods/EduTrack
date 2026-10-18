@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from typing import Annotated, Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 
 TaskTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
@@ -72,6 +72,14 @@ class TaskResponse(TaskBase):
     subject_id: int
     created_at: datetime
     updated_at: datetime
+    completed_at: datetime | None = None
+
+    @field_validator("completed_at")
+    @classmethod
+    def completion_is_utc(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -71,7 +71,10 @@ def update_task(
     """
     Atualiza uma tarefa do usuário.
     """
-    task = task_service.update_task(db=db, task_id=task_id, task_update=task_in, user_id=current_user.id)
+    try:
+        task = task_service.update_task(db=db, task_id=task_id, task_update=task_in, user_id=current_user.id)
+    except task_service.TaskStateConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not task:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     return task
@@ -86,7 +89,10 @@ def update_task_status(
     """
     Atualiza apenas o status de uma tarefa.
     """
-    task = task_service.update_task_status(db=db, task_id=task_id, status_update=status_in, user_id=current_user.id)
+    try:
+        task = task_service.update_task_status(db=db, task_id=task_id, status_update=status_in, user_id=current_user.id)
+    except task_service.TaskStateConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not task:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
     return task

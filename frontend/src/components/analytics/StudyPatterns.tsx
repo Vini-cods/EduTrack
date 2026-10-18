@@ -10,8 +10,8 @@ const hourColors = ['bg-surface-muted', 'bg-crimson/10', 'bg-crimson/20', 'bg-cr
 export function StudyPatterns({ patterns }: { patterns?: AnalyticsSessionPatterns }) {
   return <Card className="min-w-0">
     <h2 className="font-serif text-xl font-semibold text-ink">Quando você costuma estudar</h2>
-    <p className="text-sm text-graphite mt-1">Padrões das sessões concluídas no intervalo selecionado.</p>
-    {!patterns ? <p className="text-sm text-muted mt-5">Padrões de sessões indisponíveis nesta versão da API.</p> : !patterns.completed_sessions ? <div className="py-8"><p className="text-sm text-graphite">Nenhuma sessão concluída neste período. Use o Focus para começar a registrar seu ritmo.</p><Link to="/study/focus" className="inline-flex items-center gap-1 text-sm font-medium text-crimson hover:underline mt-3">Iniciar uma sessão <ArrowRight size={14} aria-hidden="true" /></Link></div> : <>
+    <p className="text-sm text-graphite mt-1">Padrões das sessões concluídas que começaram no intervalo selecionado.</p>
+    {!patterns ? <p className="text-sm text-muted mt-5">Padrões de sessões indisponíveis nesta versão da API.</p> : !patterns.completed_sessions ? <div className="py-8"><p className="text-sm text-graphite">Nenhuma sessão concluída com início neste período. O estudo de sessões que começaram antes continua nos totais e na consistência.</p><Link to="/study/focus" className="inline-flex items-center gap-1 text-sm font-medium text-crimson hover:underline mt-3">Iniciar uma sessão <ArrowRight size={14} aria-hidden="true" /></Link></div> : <>
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-y border-border py-4 mt-5">
         {[['Sessões', String(patterns.completed_sessions)], ['Duração média', formatMinutes(patterns.average_session_minutes)], ['Duração mediana', formatMinutes(patterns.median_session_minutes)], ['Maior sessão', formatMinutes(patterns.longest_session_minutes)]].map(([label, value]) => <div key={label}><dt className="text-xs text-muted">{label}</dt><dd className="text-lg font-semibold text-ink tabular-nums mt-1">{value}</dd></div>)}
       </dl>

@@ -28,6 +28,8 @@ class AnalyticsDay(LoadMetrics):
     date: date
     capacity_minutes: float
     load_percent: float = 0
+    completion_events: int = 0
+    reopened_events: int = 0
 
 
 class AnalyticsSubject(LoadMetrics):
@@ -48,6 +50,9 @@ class AnalyticsSummary(LoadMetrics):
     undated_tasks: int = 0
     capacity_minutes: float = 0
     load_percent: float = 0
+    completion_events: int = 0
+    reopened_events: int = 0
+    legacy_studied_minutes: float = 0
 
 
 class AnalyticsInsight(BaseModel):

@@ -15,6 +15,7 @@ import { PlanningDiagnostics } from '../components/analytics/PlanningDiagnostics
 import { StudyConsistency } from '../components/analytics/StudyConsistency';
 import { StudyPatterns } from '../components/analytics/StudyPatterns';
 import { SubjectAnalytics } from '../components/analytics/SubjectAnalytics';
+import { CompletionHistory } from '../components/analytics/CompletionHistory';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useAnalyticsPeriod } from '../hooks/useAnalyticsPeriod';
 import { useAcademicCapacity } from '../hooks/useAcademicCapacity';
@@ -63,7 +64,7 @@ export function Insights() {
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 py-6 mt-6 border-y border-border" aria-label="Resumo do período">
-        <Metric value={formatMinutes(data.summary.studied_minutes)} label="Estudo realizado" detail={`${data.summary.completed_sessions} sessões concluídas no Focus`} />
+        <Metric value={formatMinutes(data.summary.studied_minutes)} label="Estudo realizado" detail={`${data.summary.completed_sessions} sessões com estudo no período`} />
         <Metric value={`${data.summary.active_days}`} label="Dias com estudo" detail={`${Math.round(data.summary.consistency_percent)}% dos dias transcorridos no período`} />
         <Metric value={data.summary.tasks_due ? `${Math.round(data.summary.completion_rate)}%` : '—'} label="Entregas concluídas" detail={`${data.summary.tasks_completed} de ${data.summary.tasks_due} tarefas com prazo no período`} />
         <Metric value={formatMinutes(data.summary.unallocated_task_minutes)} label="Esforço sem bloco" detail="Estimativa restante ainda sem tempo reservado" alert={data.summary.unallocated_task_minutes > 0} />
@@ -80,6 +81,7 @@ export function Insights() {
         <PlanningDiagnostics diagnostics={data.planning_diagnostics} insights={data.insights} />
       </div>
       <div className="mt-6"><StudyPatterns patterns={data.session_patterns} /></div>
+      <CompletionHistory data={data} />
       <div className="mt-6"><SubjectAnalytics subjects={data.subjects} /></div>
       <AnalyticsMethodology methodology={data.methodology} timezone={data.period.timezone} />
     </>}

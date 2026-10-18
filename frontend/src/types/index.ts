@@ -34,6 +34,7 @@ export interface Task {
   subject_id: number;
   created_at: string;
   updated_at: string;
+  completed_at?: string | null;
 }
 
 /** Tarefa já com os dados da disciplina anexados (retornada por GET /tasks/). */

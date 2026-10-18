@@ -58,6 +58,8 @@ export interface AnalyticsDay {
   load_percent: number;
   tasks_due: number;
   tasks_completed: number;
+  completion_events?: number;
+  reopened_events?: number;
 }
 
 export interface AnalyticsSubject {
@@ -99,6 +101,9 @@ export interface AcademicAnalytics {
     open_tasks: number;
     overdue_tasks: number;
     unknown_estimate_tasks: number;
+    completion_events?: number;
+    reopened_events?: number;
+    legacy_studied_minutes?: number;
   };
   daily: AnalyticsDay[];
   subjects: AnalyticsSubject[];

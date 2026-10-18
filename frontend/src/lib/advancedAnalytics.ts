@@ -45,8 +45,8 @@ export function csvRows(rows: CsvCell[][]): string {
 export function analyticsCsv(data: AcademicAnalytics, kind: AnalyticsExport): string {
   const timezone = data.period.timezone;
   if (kind === 'daily') return csvRows([
-    ['Data', 'Fuso', 'Estudado (min)', 'Estudo agendado (min)', 'Agenda total (min)', 'Esforço sem bloco (min)', 'Carga (min)', 'Capacidade (min)', 'Ocupação (%)', 'Tarefas com prazo', 'Concluídas'],
-    ...data.daily.map((day) => [day.date, timezone, day.studied_minutes, day.planned_study_minutes, day.scheduled_minutes, day.unallocated_task_minutes, day.total_load_minutes, day.capacity_minutes, day.load_percent, day.tasks_due, day.tasks_completed]),
+    ['Data', 'Fuso', 'Estudado (min)', 'Estudo agendado (min)', 'Agenda total (min)', 'Esforço sem bloco (min)', 'Carga (min)', 'Capacidade (min)', 'Ocupação (%)', 'Tarefas com prazo', 'Concluídas com prazo', 'Eventos de conclusão', 'Eventos de reabertura'],
+    ...data.daily.map((day) => [day.date, timezone, day.studied_minutes, day.planned_study_minutes, day.scheduled_minutes, day.unallocated_task_minutes, day.total_load_minutes, day.capacity_minutes, day.load_percent, day.tasks_due, day.tasks_completed, day.completion_events ?? 0, day.reopened_events ?? 0]),
   ]);
   if (kind === 'subjects') return csvRows([
     ['Início', 'Fim', 'Fuso', 'Disciplina', 'Estudado (min)', 'Estudo agendado (min)', 'Agenda total (min)', 'Esforço sem bloco (min)', 'Carga (min)', 'Tarefas com prazo', 'Concluídas', 'Conclusão (%)'],

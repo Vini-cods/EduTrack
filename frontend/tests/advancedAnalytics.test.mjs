@@ -63,3 +63,9 @@ test('comparação exportada mantém base zero sem inventar percentual, e API an
   assert.equal(analyticsCsv(report, 'comparison').split('\r\n').length, 2);
   assert.equal(analyticsCsv({ ...report, comparison: { ...comparison, available: false } }, 'comparison').split('\r\n').length, 2);
 });
+
+test('CSV distingue estado por prazo de eventos reais de conclusão e reabertura', () => {
+  const csv = analyticsCsv({ ...report, daily: [{ ...report.daily[0], completion_events: 3, reopened_events: 1 }] }, 'daily');
+  assert.ok(csv.includes('"Concluídas com prazo";"Eventos de conclusão";"Eventos de reabertura"'));
+  assert.ok(csv.includes(';"2";"1";"3";"1"\r\n'));
+});

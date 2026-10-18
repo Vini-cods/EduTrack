@@ -8,6 +8,7 @@ from app.models.study_session import StudySession, StudySessionStatus
 from app.models.material import Material, MaterialCategory, MaterialStatus
 from app.models.note import Note
 from app.models.academic_record import Assessment, SubjectSyllabus
+from app.models.activity_history import TaskStatusEvent, StudySegment
 
 __all__ = [
     "User",
@@ -23,4 +24,6 @@ __all__ = [
     "Note",
     "Assessment",
     "SubjectSyllabus",
+    "TaskStatusEvent",
+    "StudySegment",
 ]

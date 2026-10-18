@@ -5,10 +5,12 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import update
 
 from app.models.study_session import StudySession, StudySessionStatus
 from app.models.subject import Subject
 from app.models.task import Task
+from app.models.activity_history import StudySegment
 from app.schemas.study_session import StudySessionCreate, StudySessionWithContext
 from app.services.academic_context import AcademicContextNotFoundError, resolve_subject_id
 
@@ -36,16 +38,33 @@ def _to_with_context(session: StudySession, subject_name: Optional[str], task_ti
     )
 
 
-def _close_current_segment(session: StudySession) -> None:
-    """Fecha o segmento ativo atual, somando o tempo decorrido a accumulated_seconds."""
-    if session.segment_started_at is None:
-        return
+def _transition(db: Session, session: StudySession, target: StudySessionStatus,
+                cycles: int | None = None) -> Optional[StudySession]:
+    """Estado e segmento são gravados juntos; uma disputa não contabiliza tempo duas vezes."""
     now = datetime.now(timezone.utc)
     started = session.segment_started_at
-    if started.tzinfo is None:
-        now = now.replace(tzinfo=None)
-    session.accumulated_seconds += max(0, int((now - started).total_seconds()))
-    session.segment_started_at = None
+    elapsed = 0
+    if started is not None:
+        started = started.replace(tzinfo=timezone.utc) if started.tzinfo is None else started.astimezone(timezone.utc)
+        elapsed = max(0, int((now - started).total_seconds()))
+    values = {"status": target, "updated_at": now,
+              "segment_started_at": now if target == StudySessionStatus.EM_ANDAMENTO else None,
+              "accumulated_seconds": session.accumulated_seconds + elapsed}
+    if target == StudySessionStatus.CONCLUIDA:
+        values.update(ended_at=now, pomodoro_cycles_completed=cycles or 0)
+    changed = db.execute(update(StudySession).where(
+        StudySession.id == session.id, StudySession.user_id == session.user_id,
+        StudySession.status == session.status, StudySession.updated_at == session.updated_at,
+    ).values(**values).execution_options(synchronize_session=False))
+    if changed.rowcount != 1:
+        db.rollback()
+        return None
+    if started is not None and elapsed > 0:
+        db.add(StudySegment(user_id=session.user_id, session_id=session.id, started_at=started,
+                            ended_at=now, active_seconds=elapsed))
+    db.commit()
+    db.refresh(session)
+    return session
 
 
 def get_active_session(db: Session, user_id: int) -> Optional[StudySession]:
@@ -100,35 +119,21 @@ def pause_session(db: Session, session_id: int, user_id: int) -> Optional[StudyS
     session = get_session_by_id(db, session_id, user_id)
     if not session or session.status != StudySessionStatus.EM_ANDAMENTO:
         return None
-    _close_current_segment(session)
-    session.status = StudySessionStatus.PAUSADA
-    db.commit()
-    db.refresh(session)
-    return session
+    return _transition(db, session, StudySessionStatus.PAUSADA)
 
 
 def resume_session(db: Session, session_id: int, user_id: int) -> Optional[StudySession]:
     session = get_session_by_id(db, session_id, user_id)
     if not session or session.status != StudySessionStatus.PAUSADA:
         return None
-    session.segment_started_at = datetime.now(timezone.utc)
-    session.status = StudySessionStatus.EM_ANDAMENTO
-    db.commit()
-    db.refresh(session)
-    return session
+    return _transition(db, session, StudySessionStatus.EM_ANDAMENTO)
 
 
 def stop_session(db: Session, session_id: int, user_id: int, pomodoro_cycles_completed: int) -> Optional[StudySession]:
     session = get_session_by_id(db, session_id, user_id)
     if not session or session.status not in ACTIVE_STATUSES:
         return None
-    _close_current_segment(session)
-    session.status = StudySessionStatus.CONCLUIDA
-    session.ended_at = datetime.now(timezone.utc)
-    session.pomodoro_cycles_completed = pomodoro_cycles_completed
-    db.commit()
-    db.refresh(session)
-    return session
+    return _transition(db, session, StudySessionStatus.CONCLUIDA, pomodoro_cycles_completed)
 
 
 def delete_session(db: Session, session_id: int, user_id: int) -> bool:

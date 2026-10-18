@@ -80,12 +80,12 @@ def test_clean_install_and_incremental_upgrade_match_models_and_preserve_data(mi
         subject = Subject(user_id=user.id, name="Algoritmos")
         db.add(subject)
         db.flush()
-        task = Task(user_id=user.id, subject_id=subject.id, title="Revisar grafos", priority="alta", estimated_hours=2)
-        db.add(task)
-        db.flush()
+        # Core insert omite colunas adicionadas após esta revisão histórica.
+        task_id = db.execute(Task.__table__.insert().values(user_id=user.id, subject_id=subject.id,
+            title="Revisar grafos", priority="alta", estimated_hours=2)).inserted_primary_key[0]
         db.add_all([
-            CalendarEvent(user_id=user.id, subject_id=subject.id, task_id=task.id, title="Bloco de estudo", start_datetime=now),
-            StudySession(user_id=user.id, subject_id=subject.id, task_id=task.id, status=StudySessionStatus.CONCLUIDA,
+            CalendarEvent(user_id=user.id, subject_id=subject.id, task_id=task_id, title="Bloco de estudo", start_datetime=now),
+            StudySession(user_id=user.id, subject_id=subject.id, task_id=task_id, status=StudySessionStatus.CONCLUIDA,
                          started_at=now, ended_at=now, accumulated_seconds=1200),
             Material(user_id=user.id, subject_id=subject.id, title="Notas de aula"),
         ])
@@ -114,10 +114,10 @@ def test_notes_upgrade_and_downgrade_preserve_existing_academic_data(migration_d
         subject = Subject(user_id=user.id, name="Preservar disciplina")
         db.add(subject)
         db.flush()
-        task = Task(user_id=user.id, subject_id=subject.id, title="Preservar tarefa")
-        db.add(task)
+        task_id = db.execute(Task.__table__.insert().values(user_id=user.id, subject_id=subject.id,
+            title="Preservar tarefa")).inserted_primary_key[0]
         db.commit()
-        user_id, subject_id, task_id = user.id, subject.id, task.id
+        user_id, subject_id = user.id, subject.id
     command.upgrade(config, "head")
     with Session(engine) as db:
         db.add(Note(user_id=user_id, subject_id=subject_id, task_id=task_id, title="Nova nota", content="Persistido", tags=["teste"]))
