@@ -36,7 +36,9 @@ export function normalizePomodoroConfig(value: unknown): PomodoroConfig {
 }
 
 /**
- * Durações são preferências do navegador. Um snapshot por id de sessão
+ * Leitura legada do navegador; contas autenticadas usam UserPreferencesContext.
+ * Não importar esta chave global para uma conta: ela não identifica o proprietário.
+ * Um snapshot por id de sessão
  * recupera apenas o relógio transitório; o tempo estudado vem do servidor
  * e os ciclos concluídos são enviados à StudySession ao finalizar.
  */

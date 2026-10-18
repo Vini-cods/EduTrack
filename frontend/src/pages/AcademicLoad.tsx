@@ -15,22 +15,24 @@ import { useAnalytics } from '../hooks/useAnalytics';
 import { useAnalyticsPeriod } from '../hooks/useAnalyticsPeriod';
 import { useAcademicCapacity } from '../hooks/useAcademicCapacity';
 import { analyticsDateLabel, analyticsTimezone, formatMinutes, validDailyCapacity } from '../lib/analytics';
+import { PreferencesSyncStatus } from '../components/PreferencesSyncStatus';
 
 export function AcademicLoad() {
   const periodState = useAnalyticsPeriod();
-  const { capacity, saveCapacity } = useAcademicCapacity();
+  const { capacity, saveCapacity, ready, saving } = useAcademicCapacity();
   const [capacityInput, setCapacityInput] = useState(String(capacity));
   const [capacityError, setCapacityError] = useState('');
   useEffect(() => { setCapacityInput(String(capacity)); }, [capacity]);
   const { data, loading, error, reload } = useAnalytics({ ...periodState.range, timezone: analyticsTimezone(), capacity });
 
-  const handleCapacity = (event: FormEvent) => {
+  const handleCapacity = async (event: FormEvent) => {
     event.preventDefault();
     const value = Number(capacityInput);
     if (!validDailyCapacity(value)) { setCapacityError('Informe de 0,5 a 24 horas por dia.'); return; }
     setCapacityError('');
-    const persisted = saveCapacity(value);
-    toast.success(persisted ? 'Capacidade salva neste navegador.' : 'Capacidade aplicada nesta visita. O navegador não permitiu salvar.');
+    const persisted = await saveCapacity(value);
+    if (persisted) toast.success('Capacidade salva na sua conta.');
+    else toast.error('Capacidade ainda não salva. Tente sincronizar novamente.');
   };
 
   return <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
@@ -39,10 +41,11 @@ export function AcademicLoad() {
     <AnalyticsControls {...periodState} />
     <form onSubmit={handleCapacity} className="flex flex-wrap items-end gap-3 mt-5 p-4 border border-border bg-surface rounded-lg">
       <div><label htmlFor="daily-capacity" className="block text-sm font-medium text-ink mb-1.5">Tempo disponível por dia</label><div className="flex items-center gap-2"><input id="daily-capacity" type="number" inputMode="decimal" step="0.25" min="0.5" max="24" required value={capacityInput} onChange={(event) => { setCapacityInput(event.target.value); setCapacityError(''); }} aria-invalid={!!capacityError} aria-describedby={capacityError ? 'capacity-error capacity-help' : 'capacity-help'} className="w-24 border border-border-strong rounded-md px-3 py-2 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-crimson/30" /><span className="text-sm text-graphite">horas</span></div></div>
-      <Button type="submit" variant="outline">Aplicar</Button>
-      <p id="capacity-help" className="text-xs text-muted max-w-sm pb-1">Inclua aulas e estudo. A preferência fica salva para sua conta neste navegador e é aplicada a todos os dias do período.</p>
+      <Button type="submit" variant="outline" disabled={!ready || saving} loading={saving}>Aplicar</Button>
+      <p id="capacity-help" className="text-xs text-muted max-w-sm pb-1">Inclua aulas e estudo. A preferência é sincronizada entre dispositivos e aplicada a todos os dias do período.</p>
       {capacityError && <p id="capacity-error" role="alert" className="w-full text-sm text-danger">{capacityError}</p>}
     </form>
+    <PreferencesSyncStatus />
     {loading ? <AnalyticsLoading /> : error || !data ? <AnalyticsError reload={reload} /> : <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5 py-6 mt-6 border-y border-border">
         <Metric value={formatMinutes(data.summary.total_load_minutes)} label="Carga prevista" detail="Agenda + estimativa ainda sem bloco" />

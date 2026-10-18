@@ -30,17 +30,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (token) {
-      apiClient.get('/auth/me')
-        .then(res => setUser(res.data))
+      setLoading(true);
+      apiClient.get('/auth/me', { signal: controller.signal, headers: { Authorization: `Bearer ${token}` } })
+        .then(res => { if (!controller.signal.aborted) setUser(res.data); })
         .catch(() => {
+          if (controller.signal.aborted) return;
           setToken(null);
+          setUser(null);
           localStorage.removeItem('token');
         })
-        .finally(() => setLoading(false));
+        .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     } else {
       setLoading(false);
     }
+    return () => controller.abort();
   }, [token]);
 
   const login = async (data: LoginCredentials) => {
@@ -49,6 +54,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     formData.append('password', data.password);
 
     const res = await apiClient.post('/auth/login', formData);
+    if (res.data.access_token !== token) {
+      setUser(null);
+      setLoading(true);
+    }
     setToken(res.data.access_token);
     localStorage.setItem('token', res.data.access_token);
   };

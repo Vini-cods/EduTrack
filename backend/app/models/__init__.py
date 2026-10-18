@@ -1,6 +1,7 @@
 """Importa todos os modelos para registro no Alembic."""
 
 from app.models.user import User
+from app.models.user_preferences import UserPreferences
 from app.models.subject import Subject
 from app.models.task import Task
 from app.models.calendar_event import CalendarEvent, EventCategory
@@ -12,6 +13,7 @@ from app.models.activity_history import TaskStatusEvent, StudySegment
 
 __all__ = [
     "User",
+    "UserPreferences",
     "Subject",
     "Task",
     "CalendarEvent",

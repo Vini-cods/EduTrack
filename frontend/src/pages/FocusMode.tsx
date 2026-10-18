@@ -23,10 +23,9 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Skeleton } from '../components/ui/Skeleton';
+import { useUserPreferences } from '../contexts/UserPreferencesContext';
+import { PreferencesSyncStatus } from '../components/PreferencesSyncStatus';
 import {
-  DEFAULT_POMODORO_CONFIG,
-  loadPomodoroConfig,
-  savePomodoroConfig,
   normalizePomodoroConfig,
   POMODORO_LIMITS,
   createPomodoroTimer,
@@ -61,7 +60,10 @@ export const FocusMode: React.FC = () => {
   const [phaseError, setPhaseError] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const [config, setConfig] = useState<PomodoroConfig>(DEFAULT_POMODORO_CONFIG);
+  const { value: preferences, update: updatePreferences, ready: preferencesReady, error: preferencesError } = useUserPreferences();
+  const config = preferences.pomodoro;
+  // Falha só nas preferências não pode impedir pausar/finalizar estudo em curso.
+  const canLoadSessions = preferencesReady || preferencesError;
   const [showConfig, setShowConfig] = useState(false);
 
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
@@ -106,9 +108,9 @@ export const FocusMode: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!canLoadSessions) return;
     const controller = new AbortController();
-    const cfg = loadPomodoroConfig();
-    setConfig(cfg);
+    const cfg = config;
 
     Promise.all([
       apiClient.get('/study-sessions/active', { signal: controller.signal }),
@@ -145,7 +147,7 @@ export const FocusMode: React.FC = () => {
     void loadHistory(controller.signal);
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [canLoadSessions]);
 
   const phase = timer?.phase ?? 'focus';
   const cyclesCompleted = timer?.cyclesCompleted ?? 0;
@@ -329,8 +331,7 @@ export const FocusMode: React.FC = () => {
 
   const updateConfigField = (field: keyof PomodoroConfig, value: number) => {
     const next = normalizePomodoroConfig({ ...config, [field]: value });
-    setConfig(next);
-    savePomodoroConfig(next);
+    void updatePreferences({ pomodoro: { [field]: next[field] } });
   };
 
   const filteredTasks = useMemo(
@@ -348,6 +349,7 @@ export const FocusMode: React.FC = () => {
       <div className="p-6 lg:p-8 max-w-2xl mx-auto">
         <Skeleton className="h-9 w-48 mb-8" />
         <Skeleton className="h-64 w-full rounded-xl" />
+        {!preferencesReady && <PreferencesSyncStatus />}
       </div>
     );
   }
@@ -372,6 +374,8 @@ export const FocusMode: React.FC = () => {
         }
       />
 
+      {!preferencesReady && <PreferencesSyncStatus />}
+
       {!session && showConfig && (
         <Card className="mt-6 animate-scale-in motion-reduce:animate-none" padding="md">
           <div id="pomodoro-config">
@@ -393,6 +397,7 @@ export const FocusMode: React.FC = () => {
                   min={1}
                   max={POMODORO_LIMITS[field]}
                   step={1}
+                  disabled={!preferencesReady}
                   value={config[field]}
                   onChange={(e) => updateConfigField(field, Number(e.target.value))}
                   className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-surface text-ink text-sm outline-none focus:border-crimson focus:ring-2 focus:ring-crimson/10"
@@ -400,6 +405,7 @@ export const FocusMode: React.FC = () => {
               </div>
             ))}
           </div>
+          <PreferencesSyncStatus />
           </div>
         </Card>
       )}
@@ -458,7 +464,7 @@ export const FocusMode: React.FC = () => {
               </div>
             </div>
             <Button size="lg" className="w-full" icon={<Play size={18} />} onClick={handleStart}
-              loading={pendingAction === 'start'} disabled={loadError}>
+              loading={pendingAction === 'start'} disabled={loadError || !preferencesReady}>
               Iniciar sessão de {config.focusMinutes} minutos
             </Button>
           </div>

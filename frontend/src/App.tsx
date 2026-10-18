@@ -2,6 +2,8 @@ import React, { lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { UserPreferencesProvider } from './contexts/UserPreferencesContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { PrivateRoute } from './components/PrivateRoute';
 import { DashboardLayout } from './components/DashboardLayout';
 import { RouteContent } from './components/RouteContent';
@@ -25,6 +27,7 @@ const Settings = lazy(() => import('./pages/Settings').then(module => ({ default
 
 const App: React.FC = () => (
   <AuthProvider>
+    <UserPreferencesProvider><ThemeProvider>
     <Toaster position="top-right" toastOptions={{
       style: { background: 'var(--color-surface)', color: 'var(--color-ink)', border: '1px solid var(--color-border)', borderRadius: '8px', fontSize: '14px' },
       success: { iconTheme: { primary: 'var(--color-success)', secondary: 'var(--color-surface)' } },
@@ -52,6 +55,7 @@ const App: React.FC = () => (
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes></Router>
+    </ThemeProvider></UserPreferencesProvider>
   </AuthProvider>
 );
 export default App;
