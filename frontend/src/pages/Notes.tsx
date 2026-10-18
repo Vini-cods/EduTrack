@@ -14,6 +14,7 @@ import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { RowSkeleton } from '../components/ui/Skeleton';
 import { Modal } from '../components/ui/Modal';
+import { Pagination } from '../components/ui/Pagination';
 
 interface NoteContext { subjects: Subject[]; tasks: TaskWithSubject[]; sessions: StudySessionWithContext[] }
 export function Notes() {
@@ -21,7 +22,11 @@ export function Notes() {
   const [query, setQuery] = useState('');
   const [subjectFilter, setSubjectFilter] = useState(params.get('subject_id') || '');
   const [selectedId, setSelectedId] = useState<number | null>(Number(params.get('highlight')) || null);
-  const { notes, loading, error, reload } = useNotes(query, subjectFilter);
+  const { notes, loading, error, reload, page, setPage, total } = useNotes(query, subjectFilter);
+  const [linkedNote, setLinkedNote] = useState<Note | null>(null);
+  const [linkedLoading, setLinkedLoading] = useState(false);
+  const [linkedError, setLinkedError] = useState('');
+  const [linkedRevision, setLinkedRevision] = useState(0);
   const [context, setContext] = useState<NoteContext | null>(null);
   const [contextError, setContextError] = useState('');
   const [contextRevision, setContextRevision] = useState(0);
@@ -32,7 +37,18 @@ export function Notes() {
   const articleRef = useRef<HTMLElement>(null);
   const requestedId = Number(params.get('highlight'));
   const hasRequestedNote = Number.isSafeInteger(requestedId) && requestedId > 0;
-  const selected = notes.find(note => note.id === selectedId) || (hasRequestedNote ? undefined : notes[0]);
+  const selected = notes.find(note => note.id === selectedId) || (linkedNote?.id === selectedId ? linkedNote : undefined) || (selectedId !== null ? undefined : notes[0]);
+
+  useEffect(() => {
+    setLinkedError('');
+    if (selectedId === null || notes.some(note => note.id === selectedId)) { setLinkedNote(null); setLinkedLoading(false); return; }
+    const controller = new AbortController();
+    setLinkedNote(null); setLinkedLoading(true);
+    notesApi.get(selectedId, controller.signal).then(note => { if (!controller.signal.aborted) setLinkedNote(note); })
+      .catch(() => { if (!controller.signal.aborted) { setLinkedNote(null); setLinkedError('Não foi possível abrir a nota. Ela pode ter sido excluída ou a conexão foi interrompida.'); } })
+      .finally(() => { if (!controller.signal.aborted) setLinkedLoading(false); });
+    return () => controller.abort();
+  }, [selectedId, notes, linkedRevision]);
 
   useEffect(() => {
     const id = Number(params.get('highlight'));
@@ -70,7 +86,7 @@ export function Notes() {
   }, [params, context, setParams]);
 
   const saved = (note: Note) => {
-    setEditor(null); setSelectedId(note.id); reload();
+    setEditor(null); setSelectedId(note.id); setLinkedNote(note); setQuery(''); setSubjectFilter(''); setPage(0); reload();
     toast.success('Nota salva.');
   };
   const remove = async () => {
@@ -85,15 +101,15 @@ export function Notes() {
       <SectionHeader title="Notas" description="Conceitos, dúvidas e descobertas no contexto dos seus estudos." action={<Button disabled={!context} onClick={() => setEditor({})} icon={<Plus size={16} />}>Nova nota</Button>} />
       {contextError && <div role="alert" className="mt-5 rounded-md border border-warning/30 bg-warning-soft p-3 text-sm text-ink flex flex-wrap gap-3 items-center">{contextError}<Button size="sm" variant="outline" onClick={() => setContextRevision(value => value + 1)}>Tentar novamente</Button></div>}
       <div className="mt-6 mb-5 flex flex-wrap gap-3">
-        <label className="relative flex-1 min-w-48 max-w-lg"><span className="sr-only">Buscar notas</span><Search size={17} className="absolute left-3 top-3.5 text-muted" aria-hidden="true" /><input type="search" value={query} maxLength={200} onChange={event => setQuery(event.target.value)} placeholder="Buscar por título, conteúdo ou tag…" className="w-full min-h-11 pl-10 pr-3 py-2 border border-border rounded-md bg-surface text-ink text-sm" /></label>
-        <label><span className="sr-only">Filtrar por disciplina</span><select value={subjectFilter} onChange={event => setSubjectFilter(event.target.value)} className="max-w-full min-h-11 px-3 py-2 border border-border rounded-md bg-surface text-ink text-sm"><option value="">Todas as disciplinas</option>{context?.subjects.map(subject => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
+        <label className="relative flex-1 min-w-48 max-w-lg"><span className="sr-only">Buscar notas</span><Search size={17} className="absolute left-3 top-3.5 text-muted" aria-hidden="true" /><input type="search" value={query} maxLength={200} onChange={event => { setQuery(event.target.value); setSelectedId(null); }} placeholder="Buscar por título, conteúdo ou tag…" className="w-full min-h-11 pl-10 pr-3 py-2 border border-border rounded-md bg-surface text-ink text-sm" /></label>
+        <label><span className="sr-only">Filtrar por disciplina</span><select value={subjectFilter} onChange={event => { setSubjectFilter(event.target.value); setSelectedId(null); }} className="max-w-full min-h-11 px-3 py-2 border border-border rounded-md bg-surface text-ink text-sm"><option value="">Todas as disciplinas</option>{context?.subjects.map(subject => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
       </div>
       {error ? <div role="alert" className="p-8 border border-border rounded-md bg-surface text-ink space-y-4"><p>{error}</p><Button variant="outline" onClick={reload}>Tentar novamente</Button></div> : (
         <div aria-busy={loading} className="border border-border bg-surface rounded-lg overflow-hidden">
           {loading ? <div aria-label="Carregando notas">{[0, 1, 2].map(index => <RowSkeleton key={index} />)}</div> : notes.length === 0 ? <EmptyState icon={StickyNote} title={query || subjectFilter ? 'Nenhuma nota encontrada' : 'O aprendizado merece um registro'} description={query || subjectFilter ? 'Ajuste a busca ou os filtros para encontrar suas anotações.' : 'Crie sua primeira nota e associe-a a uma disciplina, tarefa ou sessão de estudo.'} action={query || subjectFilter ? { label: 'Limpar filtros', onClick: () => { setQuery(''); setSubjectFilter(''); } } : context ? { label: 'Criar nota', onClick: () => setEditor({}) } : undefined} /> : (
             <div className="grid lg:grid-cols-[320px_1fr]">
               <nav aria-label="Suas notas" className="border-b lg:border-b-0 lg:border-r border-border max-h-72 lg:max-h-[68vh] overflow-y-auto">
-                <p className="text-xs text-graphite px-4 py-3 border-b border-border">{notes.length} {notes.length === 1 ? 'nota' : 'notas'}</p>
+                <p className="text-xs text-graphite px-4 py-3 border-b border-border">{total} {total === 1 ? 'nota' : 'notas'} · até 20 por página</p>
                 {notes.map(note => <button key={note.id} onClick={() => setSelectedId(note.id)} aria-current={selected?.id === note.id ? 'true' : undefined} className={`w-full text-left px-4 py-4 border-b border-border last:border-b-0 transition-colors hover:bg-surface-muted ${selected?.id === note.id ? 'bg-crimson-soft border-l-2 border-l-crimson' : 'border-l-2 border-l-transparent'}`}><span className="block text-sm font-semibold text-ink break-words">{note.title}</span><span className="block mt-1 text-xs text-graphite">{note.subject_name || 'Sem disciplina'}</span><span className="block mt-2 text-xs text-graphite leading-relaxed break-words">{noteExcerpt(note.content, 100) || 'Sem conteúdo'}</span>{note.tags.length > 0 && <span className="block mt-2 text-xs text-crimson break-words">{note.tags.slice(0, 3).map(tag => '#' + tag).join(' ')}{note.tags.length > 3 ? ' +' + (note.tags.length - 3) : ''}</span>}</button>)}
               </nav>
               {selected ? <article ref={articleRef} tabIndex={-1} aria-label={selected.title} className="p-5 sm:p-8 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-crimson">
@@ -105,12 +121,13 @@ export function Notes() {
                   {!selected.subject_id && !selected.task_id && !selected.study_session_id && <span>Nota livre</span>}
                 </div>
                 <div className="whitespace-pre-wrap break-words leading-relaxed text-ink text-[15px] min-h-40">{selected.content || <span className="text-graphite">Esta nota ainda não tem conteúdo.</span>}</div>
-                {selected.tags.length > 0 && <div className="flex flex-wrap gap-2 mt-8 pt-5 border-t border-border">{selected.tags.map(tag => <button key={tag} onClick={() => setQuery(tag)} className="px-2 py-1 text-xs rounded bg-surface-muted text-graphite hover:text-crimson">#{tag}</button>)}</div>}
-              </article> : <p role="status" className="p-5 sm:p-8 text-sm text-graphite">A nota solicitada não está disponível. Escolha outra nota na lista.</p>}
+                {selected.tags.length > 0 && <div className="flex flex-wrap gap-2 mt-8 pt-5 border-t border-border">{selected.tags.map(tag => <button key={tag} onClick={() => { setQuery(tag); setSelectedId(null); }} className="px-2 py-1 min-h-11 text-xs rounded bg-surface-muted text-graphite hover:text-crimson">#{tag}</button>)}</div>}
+              </article> : <div className="p-5 sm:p-8 text-sm text-graphite"><p role={linkedError ? 'alert' : 'status'}>{linkedLoading ? 'Carregando nota…' : linkedError || 'A nota solicitada não está disponível. Escolha outra nota na lista.'}</p>{linkedError && <Button className="mt-4" variant="outline" onClick={() => setLinkedRevision(value => value + 1)}>Tentar novamente</Button>}</div>}
             </div>
           )}
         </div>
       )}
+      {!error && <Pagination page={page} total={total} pageSize={20} loading={loading} onPage={index => { setSelectedId(null); setPage(index); }} />}
       {editor && context && <NoteEditor key={editor.note?.id || 'new'} {...context} note={editor.note} onClose={() => setEditor(null)} onSaved={saved} />}
       <Modal open={Boolean(deleting)} onClose={() => { if (!deletionLock.current) setDeleting(null); }} ariaLabel="Excluir nota" panelClassName="max-w-md">
         <div className="p-6"><h2 className="font-serif text-xl text-ink">Excluir esta nota?</h2><p className="text-sm text-graphite mt-3 break-words">“{deleting?.title}” será excluída permanentemente.</p><div className="mt-6 flex justify-end gap-3"><Button variant="outline" disabled={removing} onClick={() => setDeleting(null)}>Cancelar</Button><Button variant="danger" loading={removing} onClick={remove}>Excluir nota</Button></div></div>

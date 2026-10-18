@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCommandSearchIndex, matchesCommandQuery, normalizeSearchText, searchCommandIndex, SEARCH_RESULTS_PER_KIND } from '../src/lib/commandSearch.ts';
+import { buildCommandSearchIndex, matchesCommandQuery, normalizeSearchText, searchCommandIndex, noteSearchResults, materialSearchResults, SEARCH_RESULTS_PER_KIND } from '../src/lib/commandSearch.ts';
 
 const subject = { id: 1, name: 'Cálculo', description: 'Limites e derivadas', professor: 'Márcia' };
 const task = { id: 2, title: 'Lista de revisão', description: 'Funções e continuidade', subject_id: 1, subject_name: 'Cálculo', status: 'pendente' };
@@ -8,6 +8,15 @@ const note = { id: 3, title: 'Dúvidas da aula', content: 'Integração por part
 const material = { id: 4, title: 'Livro de exercícios', description: 'Referência sobre integração', url: 'https://exemplo.org/curso', subject_id: 1, subject_name: 'Cálculo' };
 const data = { subjects: [subject], tasks: [task], notes: [note], materials: [material] };
 const find = query => searchCommandIndex(buildCommandSearchIndex(data), query);
+
+test('server search keeps matches beyond the excerpt and creates deep links without full note bodies', () => {
+  const results = noteSearchResults([{ id: 45, title: 'Registro', excerpt: 'Começo sem o termo pesquisado', tags: ['revisão'], subject_name: null }]);
+  assert.equal(results[0].path, '/notes?highlight=45');
+  assert.equal(results[0].hint, 'Nota livre');
+  assert.match(results[0].description, /#revisão/);
+  assert.equal('content' in results[0], false);
+  assert.equal(materialSearchResults([material])[0].path, '/materials?highlight=4');
+});
 
 test('search ignores case/accents and accepts all query terms across different fields', () => {
   assert.equal(normalizeSearchText('  CÁLCULO\n Aplicações  '), 'calculo aplicacoes');

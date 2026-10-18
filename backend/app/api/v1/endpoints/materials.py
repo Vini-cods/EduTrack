@@ -1,20 +1,31 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
+from app.models.material import MaterialCategory, MaterialStatus
 from app.schemas.material import (
     MaterialCreate,
     MaterialUpdate,
     MaterialStatusUpdate,
     MaterialResponse,
     MaterialWithSubject,
+    MaterialPage,
 )
 from app.services import material_service
 
 router = APIRouter()
+
+
+@router.get("/page", response_model=MaterialPage)
+def read_materials_page(q: str | None = Query(default=None, max_length=200), subject_id: int | None = Query(default=None, gt=0),
+                        category: MaterialCategory | None = None, status: MaterialStatus | None = None,
+                        material_id: int | None = Query(default=None, gt=0),
+                        limit: int = Query(default=20, ge=1, le=50), offset: int = Query(default=0, ge=0),
+                        db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return material_service.page_materials(db, current_user.id, q, subject_id, category, status, limit, offset, material_id)
 
 
 @router.get("/", response_model=List[MaterialWithSubject])

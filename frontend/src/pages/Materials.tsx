@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { Plus, ExternalLink, Pencil, Trash2, FolderOpen } from 'lucide-react';
 import apiClient from '../api/client';
+import { materialsApi } from '../api/materials';
+import { Pagination } from '../components/ui/Pagination';
 import type { Material, MaterialWithSubject, MaterialCategory, MaterialStatus, Subject } from '../types';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Card } from '../components/ui/Card';
@@ -32,9 +34,19 @@ export const Materials: React.FC = () => {
   const [statusTab, setStatusTab] = useState<StatusTab>('todos');
   const [subjectFilter, setSubjectFilter] = useState('todas');
   const [categoryFilter, setCategoryFilter] = useState('todas');
+  const [query, setQuery] = useState('');
+  const [pagination, setPagination] = useState({ scope: '', index: 0 });
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<MaterialWithSubject | null>(null);
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const scope = [query, subjectFilter, categoryFilter, statusTab, highlightedId].join('|');
+  const page = pagination.scope === scope ? pagination.index : 0;
+  const setPage = (index: number) => setPagination({ scope, index });
+  const activeScope = useRef(scope);
+  activeScope.current = scope;
+  useEffect(() => { setPagination({ scope, index: 0 }); }, [scope]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [subjectsLoading, setSubjectsLoading] = useState(true);
@@ -47,26 +59,36 @@ export const Materials: React.FC = () => {
   const materialListRef = useRef<HTMLDivElement>(null);
 
   const loadMaterials = useCallback(async () => {
+    if (activeScope.current !== scope) return;
     materialRequest.current?.abort();
     const controller = new AbortController();
     materialRequest.current = controller;
     setLoading(true);
     setLoadError('');
     try {
-      const response = await apiClient.get<MaterialWithSubject[]>('/materials/', { signal: controller.signal, timeout: 15_000 });
-      if (!controller.signal.aborted) setMaterials(response.data);
+      const response = await materialsApi.page({ q: query || undefined, subject_id: subjectFilter === 'todas' ? undefined : subjectFilter,
+        category: categoryFilter === 'todas' ? undefined : categoryFilter as MaterialCategory,
+        status: statusTab === 'todos' ? undefined : statusTab, material_id: highlightedId ?? undefined, offset: page * 20 }, controller.signal);
+      if (!controller.signal.aborted && activeScope.current === scope) {
+        if (page > 0 && response.items.length === 0) { setPagination({ scope, index: Math.max(0, Math.ceil(response.total / 20) - 1) }); return; }
+        setMaterials(response.items); setTotal(response.total); setCounts(response.status_counts);
+      }
     } catch {
       if (!controller.signal.aborted) setLoadError('Não foi possível carregar os materiais. Tente novamente.');
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [query, subjectFilter, categoryFilter, statusTab, highlightedId, page, scope]);
 
   useEffect(() => {
     mounted.current = true;
-    void loadMaterials();
     return () => { mounted.current = false; materialRequest.current?.abort(); };
-  }, [loadMaterials]);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => void loadMaterials(), query ? 250 : 0);
+    return () => { clearTimeout(timer); materialRequest.current?.abort(); };
+  }, [loadMaterials, query]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -109,6 +131,7 @@ export const Materials: React.FC = () => {
       await apiClient.delete(`/materials/${id}`);
       if (mounted.current) {
         setMaterials(previous => previous?.filter(material => material.id !== id) ?? null);
+        void loadMaterials();
         toast.success('Material excluído.');
       }
     } catch {
@@ -129,6 +152,7 @@ export const Materials: React.FC = () => {
       const response = await apiClient.patch<Material>(`/materials/${id}/status`, { status });
       if (mounted.current) {
         setMaterials(previous => previous?.map(material => material.id === id ? { ...material, ...response.data } : material) ?? null);
+        void loadMaterials();
         toast.success('Status atualizado.');
       }
     } catch {
@@ -139,13 +163,7 @@ export const Materials: React.FC = () => {
     }
   };
 
-  const filtered = useMemo(() => {
-    let list = materials ?? [];
-    if (statusTab !== 'todos') list = list.filter((m) => m.status === statusTab);
-    if (subjectFilter !== 'todas') list = list.filter((m) => String(m.subject_id) === subjectFilter);
-    if (categoryFilter !== 'todas') list = list.filter((m) => m.category === categoryFilter);
-    return list;
-  }, [materials, statusTab, subjectFilter, categoryFilter]);
+  const filtered = materials ?? [];
 
   useEffect(() => {
     const id = Number(searchParams.get('highlight'));
@@ -158,17 +176,7 @@ export const Materials: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [loading, filtered, searchParams, setSearchParams]);
 
-  const counts = useMemo(() => {
-    const list = materials ?? [];
-    return {
-      todos: list.length,
-      para_estudar: list.filter((m) => m.status === 'para_estudar').length,
-      estudando: list.filter((m) => m.status === 'estudando').length,
-      concluido: list.filter((m) => m.status === 'concluido').length,
-    };
-  }, [materials]);
-
-  const isUnfiltered = statusTab === 'todos' && subjectFilter === 'todas' && categoryFilter === 'todas';
+  const isUnfiltered = !query && highlightedId === null && statusTab === 'todos' && subjectFilter === 'todas' && categoryFilter === 'todas';
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto" aria-busy={loading}>
@@ -195,24 +203,26 @@ export const Materials: React.FC = () => {
       {loading && materials !== null && <p role="status" className="mt-4 text-sm text-muted">Atualizando materiais…</p>}
       {!loading && materials !== null && highlightedId !== null && !materials.some(material => material.id === highlightedId) && <p role="status" className="mt-4 text-sm text-graphite">O material solicitado não está disponível. Ele pode ter sido excluído.</p>}
 
+      <div className="mt-6 flex flex-wrap gap-3 items-center"><label className="flex-1 max-w-lg"><span className="sr-only">Buscar materiais</span><input type="search" maxLength={200} value={query} onChange={event => { setQuery(event.target.value); setHighlightedId(null); }} placeholder="Buscar por título, descrição, link ou disciplina…" className="w-full min-h-11 px-3 border border-border rounded-md bg-surface text-ink text-sm" /></label>{highlightedId !== null && <Button variant="outline" onClick={() => setHighlightedId(null)}>Ver todos os materiais</Button>}</div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 mt-6 mb-6">
         <Tabs
           value={statusTab}
-          onChange={(k) => setStatusTab(k as StatusTab)}
+          onChange={(k) => { setStatusTab(k as StatusTab); setHighlightedId(null); }}
           tabs={[
-            { key: 'todos', label: 'Todos', count: counts.todos },
-            { key: 'para_estudar', label: 'Para estudar', count: counts.para_estudar },
-            { key: 'estudando', label: 'Estudando', count: counts.estudando },
-            { key: 'concluido', label: 'Concluído', count: counts.concluido },
+            { key: 'todos', label: 'Todos', count: counts.todos ?? 0 },
+            { key: 'para_estudar', label: 'Para estudar', count: counts.para_estudar ?? 0 },
+            { key: 'estudando', label: 'Estudando', count: counts.estudando ?? 0 },
+            { key: 'concluido', label: 'Concluído', count: counts.concluido ?? 0 },
           ]}
         />
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           <select
             value={subjectFilter}
-            onChange={(e) => setSubjectFilter(e.target.value)}
+            onChange={(e) => { setSubjectFilter(e.target.value); setHighlightedId(null); }}
             aria-label="Filtrar materiais por disciplina"
             disabled={subjectsLoading}
-            className="max-w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
+            className="max-w-full min-h-11 text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
             <option value="todas">Todas as disciplinas</option>
             {subjects.map((s) => (
@@ -223,9 +233,9 @@ export const Materials: React.FC = () => {
           </select>
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => { setCategoryFilter(e.target.value); setHighlightedId(null); }}
             aria-label="Filtrar materiais por tipo"
-            className="max-w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
+            className="max-w-full min-h-11 text-sm border border-border rounded-lg px-2.5 py-1.5 bg-surface text-graphite cursor-pointer"
           >
             <option value="todas">Todos os tipos</option>
             {MATERIAL_CATEGORIES.map((c) => (
@@ -349,6 +359,8 @@ export const Materials: React.FC = () => {
           })}
         </div>
       )}
+
+      {!loadError && <Pagination page={page} total={total} pageSize={20} loading={loading} onPage={setPage} />}
 
       <MaterialModal
         open={modalOpen}

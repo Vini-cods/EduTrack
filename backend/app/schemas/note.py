@@ -64,3 +64,25 @@ class NoteResponse(NoteBase):
         return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NotePage(BaseModel):
+    items: list[NoteResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class NoteSearchResult(BaseModel):
+    id: int
+    title: str
+    excerpt: str
+    tags: list[str]
+    subject_name: str | None
+
+
+class NoteSearchPage(BaseModel):
+    items: list[NoteSearchResult]
+    total: int
+    limit: int
+    offset: int

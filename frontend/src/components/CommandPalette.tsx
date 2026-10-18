@@ -16,8 +16,10 @@ import {
   ChartNoAxesCombined,
 } from 'lucide-react';
 import apiClient from '../api/client';
+import { notesApi } from '../api/notes';
+import { materialsApi } from '../api/materials';
 import { Modal } from './ui/Modal';
-import { buildCommandSearchIndex, matchesCommandQuery, MAX_SEARCH_QUERY_LENGTH, searchCommandIndex, type CommandSearchData, type SearchKind } from '../lib/commandSearch';
+import { buildCommandSearchIndex, matchesCommandQuery, MAX_SEARCH_QUERY_LENGTH, searchCommandIndex, normalizeSearchText, noteSearchResults, materialSearchResults, type CommandSearchData, type CommandSearchResult, type SearchKind } from '../lib/commandSearch';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -38,8 +40,6 @@ const emptyData: CommandSearchData = { subjects: [], tasks: [], notes: [], mater
 const searchSources = [
   { key: 'subjects', label: 'disciplinas', path: '/subjects/' },
   { key: 'tasks', label: 'tarefas', path: '/tasks/' },
-  { key: 'notes', label: 'notas', path: '/notes/' },
-  { key: 'materials', label: 'materiais', path: '/materials/' },
 ] as const;
 const searchGroups: Record<SearchKind, { label: string; icon: React.ElementType }> = {
   subject: { label: 'Disciplinas', icon: BookOpen },
@@ -53,8 +53,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const [data, setData] = useState<CommandSearchData>(emptyData);
-  const [loading, setLoading] = useState(false);
-  const [failedSources, setFailedSources] = useState<string[]>([]);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotFailed, setSnapshotFailed] = useState<string[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteFailed, setRemoteFailed] = useState<string[]>([]);
+  const [remote, setRemote] = useState<{ query: string; items: CommandSearchResult[] }>({ query: '', items: [] });
+  const loading = snapshotLoading || remoteLoading;
+  const failedSources = [...snapshotFailed, ...remoteFailed];
   const [revision, setRevision] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -65,6 +70,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
     setQuery('');
     setActiveIndex(0);
     setData(emptyData);
+    setRemote({ query: '', items: [] });
     const t = setTimeout(() => inputRef.current?.focus(), 30);
     return () => clearTimeout(t);
   }, [open]);
@@ -72,8 +78,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
-    setLoading(true);
-    setFailedSources([]);
+    setSnapshotLoading(true);
+    setSnapshotFailed([]);
     async function load<Key extends keyof CommandSearchData>(key: Key, path: string) {
       const response = await apiClient.get<CommandSearchData[Key]>(path, { signal: controller.signal, timeout: 15_000 });
       if (!controller.signal.aborted) setData(previous => ({ ...previous, [key]: response.data }));
@@ -81,11 +87,31 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
     // One snapshot per opening/retry. Partial successes remain searchable.
     Promise.allSettled(searchSources.map(source => load(source.key, source.path))).then(results => {
       if (controller.signal.aborted) return;
-      setFailedSources(results.flatMap((result, index) => result.status === 'rejected' ? [searchSources[index].label] : []));
-      setLoading(false);
+      setSnapshotFailed(results.flatMap((result, index) => result.status === 'rejected' ? [searchSources[index].label] : []));
+      setSnapshotLoading(false);
     });
     return () => controller.abort();
   }, [open, revision]);
+
+  useEffect(() => {
+    setRemoteFailed([]);
+    // No request or saved-content download for the initial navigation menu.
+    if (!open || !normalizeSearchText(query).replace(/#/g, '').trim()) { setRemoteLoading(false); return; }
+    const controller = new AbortController();
+    setRemoteLoading(true);
+    const timer = setTimeout(() => {
+      Promise.allSettled([
+        notesApi.search(query.trim(), controller.signal).then(page => noteSearchResults(page.items)),
+        materialsApi.page({ q: query.trim(), limit: 5 }, controller.signal).then(page => materialSearchResults(page.items)),
+      ]).then(results => {
+        if (controller.signal.aborted) return;
+        setRemote({ query, items: results.flatMap(result => result.status === 'fulfilled' ? result.value : []) });
+        setRemoteFailed(results.flatMap((result, index) => result.status === 'rejected' ? [index === 0 ? 'notas' : 'materiais'] : []));
+        setRemoteLoading(false);
+      });
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [open, query, revision]);
 
   const go = useCallback((path: string) => {
     navigate(path);
@@ -118,14 +144,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
   const results = useMemo<CommandItem[]>(() => {
     if (!query.trim()) return staticCommands;
     const commands = staticCommands.filter(command => matchesCommandQuery(command.label, query));
-    const academic: CommandItem[] = searchCommandIndex(searchIndex, query).map(result => ({
+    const matched = [...searchCommandIndex(searchIndex, query), ...(remote.query === query ? remote.items : [])];
+    const academic: CommandItem[] = matched.map(result => ({
       ...result,
       icon: searchGroups[result.kind].icon,
       group: searchGroups[result.kind].label,
       action: () => go(result.path),
     }));
     return [...commands, ...academic];
-  }, [query, staticCommands, searchIndex, go]);
+  }, [query, staticCommands, searchIndex, remote, go]);
 
   useEffect(() => setActiveIndex(0), [query]);
   useEffect(() => setActiveIndex(index => Math.min(index, Math.max(0, results.length - 1))), [results.length]);
@@ -180,7 +207,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose })
         <kbd className="hidden sm:inline text-xs text-muted border border-border rounded px-1.5 py-0.5">Esc</kbd>
       </div>
 
-      {loading && <p role="status" className="px-4 py-2 text-xs text-muted border-b border-border">Carregando disciplinas, tarefas, notas e materiais…</p>}
+      {loading && <p role="status" className="px-4 py-2 text-xs text-muted border-b border-border">Buscando no seu acervo acadêmico…</p>}
       {failedSources.length > 0 && <div role="alert" className="px-4 py-2 border-b border-border text-xs text-graphite flex flex-wrap items-center gap-2"><p className="flex-1 min-w-40">Busca parcial: não foi possível atualizar {failedSources.join(', ')}.</p><button className="text-crimson underline min-h-11 cursor-pointer" onClick={() => setRevision(value => value + 1)}>Tentar novamente</button></div>}
       <div ref={resultRef} id={resultId} role="listbox" aria-label="Resultados da busca" className="max-h-[50dvh] overflow-y-auto py-2">
         {results.length === 0 && !loading ? (

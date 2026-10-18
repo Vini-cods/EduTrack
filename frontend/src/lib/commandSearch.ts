@@ -1,5 +1,6 @@
 import type { MaterialWithSubject, Subject, TaskWithSubject } from '../types';
 import type { Note } from '../types/notes';
+import type { NoteSearchItem } from '../api/notes';
 
 export type SearchKind = 'subject' | 'task' | 'note' | 'material';
 
@@ -27,6 +28,17 @@ export interface CommandSearchData {
 
 export const MAX_SEARCH_QUERY_LENGTH = 200;
 export const SEARCH_RESULTS_PER_KIND = 5;
+
+/** Server results are already matched/ranked across full bodies; never re-filter excerpts. */
+export function noteSearchResults(notes: readonly NoteSearchItem[]): CommandSearchResult[] {
+  return notes.map(note => ({ id: 'note-' + note.id, kind: 'note', label: note.title, hint: note.subject_name || 'Nota livre',
+    description: excerpt([note.tags.map(tag => '#' + tag).join(' '), note.excerpt].filter(Boolean).join(' · ')), path: '/notes?highlight=' + note.id }));
+}
+
+export function materialSearchResults(materials: readonly MaterialWithSubject[]): CommandSearchResult[] {
+  return materials.map(material => ({ id: 'material-' + material.id, kind: 'material', label: material.title, hint: material.subject_name || 'Material',
+    description: excerpt(material.description || material.url || ''), path: '/materials?highlight=' + material.id }));
+}
 
 export function normalizeSearchText(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ').trim();

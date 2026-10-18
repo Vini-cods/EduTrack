@@ -47,3 +47,11 @@ class MaterialWithSubject(MaterialResponse):
 
     subject_name: str
     subject_color: Optional[str] = None
+
+
+class MaterialPage(BaseModel):
+    items: list[MaterialWithSubject]
+    total: int
+    limit: int
+    offset: int
+    status_counts: dict[str, int]

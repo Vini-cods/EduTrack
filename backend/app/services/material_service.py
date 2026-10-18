@@ -2,11 +2,14 @@
 
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.material import Material
 from app.models.subject import Subject
 from app.schemas.material import MaterialCreate, MaterialUpdate, MaterialWithSubject
+from app.schemas.material import MaterialPage
+from app.services.search import apply_text_search, search_fields, search_rank
 
 
 def _to_with_subject(material: Material, subject_name: str, subject_color: Optional[str]) -> MaterialWithSubject:
@@ -35,6 +38,30 @@ def get_materials_for_user(db: Session, user_id: int) -> List[MaterialWithSubjec
         .all()
     )
     return [_to_with_subject(material, name, color) for material, name, color in rows]
+
+
+def page_materials(db: Session, user_id: int, q: str | None, subject_id: int | None,
+                   category, status, limit: int, offset: int, material_id: int | None = None) -> MaterialPage:
+    query = (db.query(Material, Subject.name, Subject.color).join(Subject, Material.subject_id == Subject.id)
+             .filter(Material.user_id == user_id, Subject.user_id == user_id))
+    fields = search_fields(db, Material.title, Material.description, Material.url, Subject.name)
+    query = apply_text_search(query, fields, q)
+    if subject_id is not None:
+        query = query.filter(Material.subject_id == subject_id)
+    if category is not None:
+        query = query.filter(Material.category == category)
+    if material_id is not None:
+        query = query.filter(Material.id == material_id)
+    # Tab counts describe the complete query/subject/category scope, not one page.
+    status_counts = {value.value: count for value, count in query.with_entities(Material.status, func.count(Material.id)).group_by(Material.status).all()}
+    status_counts["todos"] = sum(status_counts.values())
+    if status is not None:
+        query = query.filter(Material.status == status)
+    total = query.count()
+    rows = (query.order_by(search_rank(fields, q), Material.created_at.desc(), Material.id.desc())
+            .offset(offset).limit(limit).all())
+    return MaterialPage(items=[_to_with_subject(material, name, color) for material, name, color in rows],
+                        total=total, limit=limit, offset=offset, status_counts=status_counts)
 
 
 def get_materials_by_subject(db: Session, subject_id: int, user_id: int) -> List[Material]:

@@ -1,12 +1,15 @@
 """CRUD com contexto validado e isolamento pelo proprietário em todas as operações."""
 
-from sqlalchemy import or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.note import Note
+from app.models.subject import Subject
+from app.models.task import Task
 from app.models.study_session import StudySession
-from app.schemas.note import NoteCreate, NoteResponse, NoteUpdate
+from app.schemas.note import NoteCreate, NoteResponse, NoteUpdate, NotePage, NoteSearchPage, NoteSearchResult
 from app.services.academic_context import AcademicContextMismatchError, AcademicContextNotFoundError, resolve_subject_id
+from app.services.search import apply_text_search, search_fields, search_rank, search_tokens
 
 
 def _resolve_context(db: Session, user_id: int, subject_id: int | None, task_id: int | None, session_id: int | None) -> tuple[int | None, int | None]:
@@ -44,14 +47,41 @@ def get_note(db: Session, user_id: int, note_id: int) -> Note | None:
 
 def list_notes(db: Session, user_id: int, q: str | None = None, subject_id: int | None = None,
                task_id: int | None = None, study_session_id: int | None = None) -> list[NoteResponse]:
-    query = db.query(Note).options(joinedload(Note.subject)).filter(Note.user_id == user_id)
+    query, fields = _filtered_notes(db, user_id, q, subject_id, task_id, study_session_id)
+    return [_response(note) for note in query.options(joinedload(Note.subject)).order_by(search_rank(fields, q), Note.updated_at.desc(), Note.id.desc()).all()]
+
+
+def _filtered_notes(db: Session, user_id: int, q: str | None, subject_id: int | None = None,
+                    task_id: int | None = None, study_session_id: int | None = None):
+    query = (db.query(Note).outerjoin(Subject, Note.subject_id == Subject.id)
+             .outerjoin(Task, Note.task_id == Task.id).filter(Note.user_id == user_id))
     for field, value in ((Note.subject_id, subject_id), (Note.task_id, task_id), (Note.study_session_id, study_session_id)):
         if value is not None:
             query = query.filter(field == value)
-    if q and q.strip():
-        # Autoescape mantém % e _ como texto; não expande a busca acidentalmente.
-        query = query.filter(or_(Note.title.icontains(q.strip(), autoescape=True), Note.content.icontains(q.strip(), autoescape=True)))
-    return [_response(note) for note in query.order_by(Note.updated_at.desc(), Note.id.desc()).all()]
+    fields = search_fields(db, Note.title, Note.content, Subject.name, Task.title, tags=Note.tags)
+    return apply_text_search(query, fields, q), fields
+
+
+def page_notes(db: Session, user_id: int, q: str | None, subject_id: int | None,
+               task_id: int | None, study_session_id: int | None, limit: int, offset: int) -> NotePage:
+    query, fields = _filtered_notes(db, user_id, q, subject_id, task_id, study_session_id)
+    total = query.count()
+    notes = (query.options(joinedload(Note.subject)).order_by(search_rank(fields, q), Note.updated_at.desc(), Note.id.desc())
+             .offset(offset).limit(limit).all())
+    return NotePage(items=[_response(note) for note in notes], total=total, limit=limit, offset=offset)
+
+
+def search_notes(db: Session, user_id: int, q: str, limit: int, offset: int) -> NoteSearchPage:
+    if not search_tokens(q):
+        return NoteSearchPage(items=[], total=0, limit=limit, offset=offset)
+    query, fields = _filtered_notes(db, user_id, q)
+    total = query.count()
+    # Clip on the server: command search must never transfer full note bodies.
+    excerpt = func.substr(Note.content, 1, 160) if db.bind.dialect.name == "sqlite" else func.substring(Note.content, 1, 160)
+    rows = (query.with_entities(Note.id, Note.title, excerpt, Note.tags, Subject.name)
+            .order_by(search_rank(fields, q), Note.updated_at.desc(), Note.id.desc()).offset(offset).limit(limit).all())
+    return NoteSearchPage(items=[NoteSearchResult(id=row[0], title=row[1], excerpt=row[2], tags=row[3], subject_name=row[4]) for row in rows],
+                          total=total, limit=limit, offset=offset)
 
 
 def read_note(db: Session, user_id: int, note_id: int) -> NoteResponse | None:
