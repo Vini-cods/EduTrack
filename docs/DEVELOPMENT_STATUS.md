@@ -1,9 +1,12 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 17/10/2026.
+Atualizado em 18/10/2026.
 
 ## Entrega atual
 
+- Ajustes de interface em 18/10: sidebar compacta, links com altura mínima de 44 px e rolagem local. O item ativo permanece visível ao navegar, recolher o menu ou redimensionar a janela, com acompanhamento por ResizeObserver; cabeçalho e rodapé não encolhem e a altura segue o viewport dinâmico (dvh). Tooltips aceitam className para os alvos do menu recolhido, preservando title como alternativa.
+- Controles de Analytics agrupam setas e intervalo em um grid coeso; Hoje permanece independente e os botões mantêm alvo de 44 px. A navegação Semana/Mês preserva as regras de período existentes e permite que datas longas quebrem em duas linhas no celular.
+- Sete cards simples do Dashboard usam uma coluna no mobile e duas a partir de xl, com CSS columns e break-inside-avoid para reduzir espaços vazios. A ordem do DOM e do teclado desce a primeira coluna e depois a segunda. Gráficos Recharts permanecem fora desse agrupamento para preservar seu tamanho e leitura integral. O CTA duplicado de Insights foi removido; “Explorar Insights” permanece junto aos gráficos. O diagnóstico compacto dispõe suas duas métricas lado a lado quando houver espaço.
 - Símbolo da logo refinado, aplicado sem nome/slogan à interface interna e favicon, com versões crimson, grafite e para fundo escuro. Na entrada, a composição completa reúne símbolo, EDUTRACK e slogan, em crimson no claro e off-white no escuro; reutiliza a silhueta existente e texto nítido da interface. Imagem original preservada.
 - Login e cadastro usam um portal centralizado inspirado na estrutura visual de https://ead.sp.senai.br/: marca completa centralizada acima do formulário compacto, ajuda de acesso, tema, geometria SVG original e rede de partículas em Canvas 2D. A identidade e o símbolo são do EduTrack; os elementos gráficos não carregam recursos externos. Recuperação e redefinição compartilham o mesmo layout.
 - Login tem duas etapas: e-mail e senha. Cadastro separa nome/e-mail de senha/confirmação. Avançar valida somente os campos da etapa localmente; a autenticação/criação ocorre no envio final. Voltar preserva valores e posiciona o foco no campo inicial. Validação acessível, Caps Lock no login, confirmação de senha e bloqueio de envios simultâneos foram preservados; mostrar senha mantém alvo de 44 px.
@@ -80,6 +83,12 @@ No cronograma, editar altera uma ocorrência; para substituir a grade inteira, e
 Faça backup antes de atualizar um banco de uso real. Backups locais ficam em backend/.backups, fora do versionamento. Bancos com sessões ativas duplicadas precisam resolver as sessões extras explicitamente antes da migração c218.
 
 ## Validação e execução
+
+Rodada de interface de 18/10: 84/84 testes frontend aprovados. O build final, já incluindo ResizeObserver e CSS columns, terminou com código 0 em `npm run build` (`tsc && vite build`): TypeScript aprovado, 2.672 módulos transformados e etapa Vite concluída em 1 min 39 s. Não houve alteração de API, models, migrations, banco real ou dependências, e a suíte backend não foi repetida para esta correção de UI.
+
+QA confirmado em 18/10 com um Dashboard de baixa densidade (uma tarefa), em 1280 × 720: a diferença entre o fim das duas colunas caiu de 200,75 px na primeira tentativa para 21,25 px após CSS columns, sem transbordamento horizontal. O link Insights ficou inteiramente visível na sidebar expandida com altura de 720 px. Após recolher e redimensionar de 720 para 600 px, o item ativo ocupou y=447–491 dentro da área de navegação y=148–491; o alvo mediu 51 × 44 px.
+
+Insights no tema escuro foi conferido em 320 px, com viewport e página de 312 px úteis, sem transbordamento horizontal. As setas anterior/próxima permaneceram alinhadas em y=347, ambas com 44 × 44 px. A faixa de datas ocupou duas linhas e 38,5 px de altura; a navegação mensal funcionou. Esta rodada ainda não registra QA de uma agenda cheia; os resultados acima se limitam aos cenários explicitamente conferidos.
 
 Frontend, no diretório frontend (Node 22.16+):
 
