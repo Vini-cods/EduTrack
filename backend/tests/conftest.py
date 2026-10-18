@@ -27,6 +27,7 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.db.base import Base
 from app.api.deps import get_db
+from app.core.security import pwd_context
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
@@ -47,6 +48,21 @@ def _override_get_db():
 
 
 app.dependency_overrides[get_db] = _override_get_db
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _fast_test_password_hashes():
+    """Mantém bcrypt real e seus limites, reduzindo somente o custo nos testes.
+
+    O contexto é restaurado no teardown; a configuração da aplicação e os
+    processos do backend real continuam com o custo padrão de produção.
+    """
+    original_config = pwd_context.to_dict()
+    pwd_context.update(bcrypt__rounds=4)
+    try:
+        yield
+    finally:
+        pwd_context.load(original_config)
 
 
 @pytest.fixture(autouse=True)
