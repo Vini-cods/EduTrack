@@ -12,6 +12,10 @@ import { PriorityTasks } from '../components/dashboard/PriorityTasks';
 import { TodayAgenda } from '../components/dashboard/TodayAgenda';
 import { UpcomingDeadlines } from '../components/dashboard/UpcomingDeadlines';
 import { DashboardWeeklyCharts } from '../components/dashboard/DashboardWeeklyCharts';
+import { DashboardNextAction } from '../components/dashboard/DashboardNextAction';
+import { DashboardDeadlinePressure } from '../components/dashboard/DashboardDeadlinePressure';
+import { PeriodComparison } from '../components/analytics/PeriodComparison';
+import { PlanningDiagnostics } from '../components/analytics/PlanningDiagnostics';
 import { AcademicMetric as Metric } from '../components/analytics/AcademicMetric';
 import { useDashboard } from '../hooks/useDashboard';
 import { useAnalytics } from '../hooks/useAnalytics';
@@ -19,6 +23,7 @@ import { useAcademicCapacity } from '../hooks/useAcademicCapacity';
 import { analyticsRange, analyticsTimezone, formatMinutes } from '../lib/analytics';
 import { formatLongDate } from '../lib/date';
 import { dashboardAgenda, dashboardDeadlines, dashboardPriorities } from '../lib/dashboard';
+import { dashboardRecommendation } from '../lib/dashboardRecommendation';
 import { projectCalendarItems } from '../lib/calendarProjection';
 
 function greeting(): string {
@@ -28,7 +33,7 @@ function greeting(): string {
 
 export function Dashboard() {
   const { user } = useAuth();
-  const { data, setData, loading, error, reload, today } = useDashboard();
+  const { data, setData, loading, error, reload, today, currentTime } = useDashboard();
   const { capacity } = useAcademicCapacity();
   const now = useMemo(() => new Date(`${today}T00:00:00`), [today]);
   const week = useMemo(() => analyticsRange('week', now), [now]);
@@ -37,6 +42,7 @@ export function Dashboard() {
   const completingRef = useRef(new Set<number>());
   const priorities = useMemo(() => dashboardPriorities(data?.tasks ?? [], now), [data?.tasks, now]);
   const agenda = useMemo(() => dashboardAgenda(data?.events ?? [], now), [data?.events, now]);
+  const recommendation = useMemo(() => dashboardRecommendation(data?.tasks ?? [], data?.events ?? [], currentTime), [data?.tasks, data?.events, currentTime]);
   const deadlines = useMemo(() => {
     if (!data) return [];
     const end = new Date(now);
@@ -74,7 +80,7 @@ export function Dashboard() {
   return <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto" aria-busy={loading}>
     <header className="flex flex-wrap justify-between items-end gap-5 animate-fade-in-up">
       <div><p className="text-sm text-muted mb-2">{formatLongDate(now)}</p><h1 className="font-serif text-3xl sm:text-4xl font-semibold text-ink">{greeting()}, {firstName}.</h1><p className="text-graphite mt-2 max-w-xl">Seu dia acadêmico, em ordem de importância.</p></div>
-      <div className="flex flex-wrap gap-2"><Link to="/study/focus" className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2.5 text-sm font-medium text-ink bg-surface hover:bg-surface-muted"><Timer size={16} /> Iniciar Focus</Link><Link to="/tasks?new=1" className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white bg-crimson hover:bg-crimson-dark"><Plus size={16} /> Nova tarefa</Link></div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading || analytics.loading} onClick={() => { reload(); analytics.reload(); }} aria-label="Atualizar dashboard" title="Atualizar dashboard" icon={<RefreshCw size={16} aria-hidden="true" />}><span className="sr-only sm:not-sr-only">Atualizar</span></Button><Link to="/study/focus" className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2.5 text-sm font-medium text-ink bg-surface hover:bg-surface-muted"><Timer size={16} /> Iniciar Focus</Link><Link to="/tasks?new=1" className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white bg-crimson hover:bg-crimson-dark"><Plus size={16} /> Nova tarefa</Link></div>
     </header>
     {error && <div role="alert" className="flex flex-wrap gap-3 items-center justify-between mt-5 p-3 border border-warning/30 bg-warning-soft text-warning text-sm rounded-md"><p>Não foi possível atualizar. Exibindo os últimos dados carregados.</p><button type="button" onClick={reload} className="underline font-medium">Tentar novamente</button></div>}
 
@@ -84,6 +90,11 @@ export function Dashboard() {
       <Metric value={String(overdue)} label="Tarefas em atraso" detail={overdue ? 'Reavalie os prazos e priorize' : 'Prazos anteriores em dia'} alert={overdue > 0} />
       <Metric value={analytics.loading ? '…' : analytics.data ? formatMinutes(analytics.data.summary.studied_minutes) : '—'} label="Estudo nesta semana" detail="Tempo ativo de sessões concluídas" />
     </div>
+
+    <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6" aria-label="Prioridade do momento e distribuição dos prazos">
+      <DashboardNextAction recommendation={recommendation} />
+      {analytics.data ? <DashboardDeadlinePressure days={analytics.data.daily} today={today} /> : analytics.loading ? <Card role="status" aria-label="Carregando distribuição de prazos"><Skeleton className="h-5 w-48 mb-5" /><Skeleton className="h-32 w-full" /></Card> : <Card><p className="text-sm text-graphite">A distribuição de prazos está indisponível.</p><Button variant="outline" className="mt-4" onClick={analytics.reload} icon={<RefreshCw size={15} />}>Tentar novamente</Button></Card>}
+    </section>
 
     {data.summary.total_subjects === 0 && <Card className="mt-6"><div className="flex gap-4 items-start"><BookOpen size={24} className="text-crimson shrink-0 mt-1" aria-hidden="true" /><div><h2 className="font-serif text-xl text-ink font-semibold">Seu semestre começa aqui</h2><p className="text-sm text-graphite mt-1">Adicione sua primeira disciplina para conectar tarefas, materiais e estudos.</p><Link to="/subjects?new=1" className="inline-flex items-center gap-1 text-sm text-crimson font-medium mt-3 hover:underline">Criar disciplina <ArrowRight size={14} /></Link></div></div></Card>}
 
@@ -96,9 +107,9 @@ export function Dashboard() {
             <div className="mt-3"><ProgressBar value={analytics.data.summary.load_percent} tone={analytics.data.summary.load_percent > 100 ? 'crimson' : 'navy'} size="sm" /></div>
             <p className="text-sm text-graphite mt-3 leading-relaxed">{formatMinutes(analytics.data.summary.total_load_minutes)} previstos de {formatMinutes(analytics.data.summary.capacity_minutes)} disponíveis.</p>
             <dl className="space-y-3 border-t border-border pt-4 mt-4 text-sm"><div className="flex justify-between gap-3"><dt className="text-graphite">Estudo agendado</dt><dd className="font-medium text-ink tabular-nums">{formatMinutes(analytics.data.summary.planned_study_minutes)}</dd></div><div className="flex justify-between gap-3"><dt className="text-graphite">Dias com estudo</dt><dd className="font-medium text-ink tabular-nums">{analytics.data.summary.active_days}</dd></div></dl>
-            {analytics.data.summary.unknown_estimate_tasks > 0 && <p className="text-xs text-muted mt-4">{analytics.data.summary.unknown_estimate_tasks} tarefas abertas ainda sem estimativa.</p>}
           </>}
         </Card>
+        {analytics.data && <><PeriodComparison comparison={analytics.data.comparison} compact /><PlanningDiagnostics diagnostics={analytics.data.planning_diagnostics} insights={analytics.data.insights} compact /></>}
         <Card><div className="flex items-center justify-between gap-3 mb-5"><h2 className="font-serif text-xl font-semibold text-ink">Suas disciplinas</h2><Link to="/subjects" className="text-sm text-graphite hover:text-crimson">Ver todas</Link></div>
           {subjects.length ? <div className="space-y-5">{subjects.slice(0, 5).map((subject) => <Link key={subject.subject_id} to={`/subjects/${subject.subject_id}`} className="block group"><div className="flex justify-between items-start gap-3 text-sm mb-2"><span className="font-medium text-ink group-hover:text-crimson break-words">{subject.subject_name}</span><span className="text-graphite tabular-nums shrink-0">{Math.round(subject.progress)}%</span></div><ProgressBar value={subject.progress} tone={subject.progress < 40 ? 'crimson' : 'navy'} size="sm" /><p className="text-xs text-muted mt-1.5">{subject.completed_tasks} de {subject.total_tasks} tarefas concluídas</p></Link>)}</div> : <p className="text-sm text-muted">O progresso aparece quando você adiciona tarefas às disciplinas.</p>}
         </Card>

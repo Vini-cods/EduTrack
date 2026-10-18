@@ -3,7 +3,8 @@ import { fetchDashboardWorkspace, type DashboardWorkspace } from '../api/dashboa
 import { localDateKey } from '../lib/analytics';
 
 export function useDashboard() {
-  const [today, setToday] = useState(() => localDateKey(new Date()));
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const today = localDateKey(currentTime);
   const [data, setData] = useState<DashboardWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -11,8 +12,10 @@ export function useDashboard() {
   const reload = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setToday(localDateKey(new Date())), 60000);
-    return () => window.clearInterval(timer);
+    const update = () => { if (!document.hidden) setCurrentTime(new Date()); };
+    const timer = window.setInterval(update, 60000);
+    document.addEventListener('visibilitychange', update);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', update); };
   }, []);
 
   useEffect(() => {
@@ -28,5 +31,5 @@ export function useDashboard() {
     return () => controller.abort();
   }, [today, revision]);
 
-  return { data, setData, loading, error, reload, today };
+  return { data, setData, loading, error, reload, today, currentTime };
 }
