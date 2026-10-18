@@ -5,9 +5,9 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
-  color: #ba243b;
+  color: #c81e3e;
 }
 
 :root[data-theme='dark'] .auth-network {
-  color: #f05a70;
+  color: #ff6278;
 }

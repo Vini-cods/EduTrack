@@ -45,7 +45,7 @@ export function AuthNetwork() {
           const b = particles[j];
           const separation = Math.hypot(a.x - b.x, a.y - b.y);
           if (separation >= distance) continue;
-          context.globalAlpha = (1 - separation / distance) * .68;
+          context.globalAlpha = (1 - separation / distance) * .78;
           context.beginPath();
           context.moveTo(a.x, a.y);
           context.lineTo(b.x, b.y);
