@@ -12,7 +12,7 @@ export function PlanningDiagnostics({ diagnostics, insights, compact = false }: 
     <h2 className={compact ? 'text-base font-semibold text-ink' : 'font-serif text-xl font-semibold text-ink'}>Do diagnóstico à ação</h2>
     <p className="text-sm text-graphite mt-1">Ajustes concretos a partir do seu planejamento.</p>
     {!diagnostics ? <p className="text-sm text-muted mt-4">Métricas avançadas indisponíveis nesta versão da API. As observações existentes continuam abaixo.</p> : <>
-      <div className={compact ? 'mt-5 space-y-4' : 'grid grid-cols-1 sm:grid-cols-3 gap-5 mt-5'}>
+      <div className={compact ? 'grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5' : 'grid grid-cols-1 sm:grid-cols-3 gap-5 mt-5'}>
         <div>
           <p className="text-xs text-muted">Esforço restante com bloco</p>
           <p className="text-2xl font-semibold text-ink tabular-nums mt-1">{diagnostics.planning_coverage_percent === null ? '—' : `${Math.round(diagnostics.planning_coverage_percent)}%`}</p>

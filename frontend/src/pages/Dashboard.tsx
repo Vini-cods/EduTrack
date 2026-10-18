@@ -98,10 +98,13 @@ export function Dashboard() {
 
     {data.summary.total_subjects === 0 && <Card className="mt-6"><div className="flex gap-4 items-start"><BookOpen size={24} className="text-crimson shrink-0 mt-1" aria-hidden="true" /><div><h2 className="font-serif text-xl text-ink font-semibold">Seu semestre começa aqui</h2><p className="text-sm text-graphite mt-1">Adicione sua primeira disciplina para conectar tarefas, materiais e estudos.</p><Link to="/subjects?new=1" className="inline-flex items-center gap-1 text-sm text-crimson font-medium mt-3 hover:underline">Criar disciplina <ArrowRight size={14} /></Link></div></div></Card>}
 
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
-      <div className="xl:col-span-2 min-w-0 space-y-6"><PriorityTasks tasks={priorities} today={today} completing={completing} onComplete={completeTask} /><TodayAgenda events={agenda} today={today} /><UpcomingDeadlines events={deadlines} /></div>
-      <aside className="min-w-0 space-y-6" aria-label="Visão da semana e disciplinas">
-        <Card><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-serif text-xl font-semibold text-ink">Esta semana</h2><Link to="/academic-load" className="inline-flex items-center gap-1 text-sm text-crimson font-medium hover:underline">Ver carga <ArrowRight size={14} /></Link></div>
+    {/* O fluxo por coluna equilibra painéis de alturas diferentes e mantém a
+        leitura/teclado na ordem do DOM, sem medir ou reposicionar via JavaScript. */}
+    <section className="columns-1 xl:columns-2 gap-6 mt-6" aria-label="Atividades e visão acadêmica da semana">
+      <div className="mb-6 break-inside-avoid"><PriorityTasks tasks={priorities} today={today} completing={completing} onComplete={completeTask} /></div>
+      <div className="mb-6 break-inside-avoid"><TodayAgenda events={agenda} today={today} /></div>
+      <div className="mb-6 break-inside-avoid"><UpcomingDeadlines events={deadlines} /></div>
+        <Card className="mb-6 break-inside-avoid"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-serif text-xl font-semibold text-ink">Esta semana</h2><Link to="/academic-load" className="inline-flex items-center gap-1 text-sm text-crimson font-medium hover:underline">Ver carga <ArrowRight size={14} /></Link></div>
           {analytics.loading ? <div className="space-y-4 mt-5" role="status" aria-label="Carregando carga da semana"><Skeleton className="h-8 w-24" /><Skeleton className="h-2 w-full" /><Skeleton className="h-12 w-full" /></div> : analytics.error || !analytics.data ? <div className="mt-5 text-sm text-graphite"><p>Não foi possível calcular a carga da semana.</p><button type="button" onClick={analytics.reload} className="mt-3 font-medium text-crimson hover:underline">Tentar novamente</button></div> : <>
             <div className="flex justify-between gap-3 items-baseline mt-5"><p className={`font-serif text-3xl font-semibold tabular-nums ${analytics.data.summary.load_percent > 100 ? 'text-danger' : 'text-ink'}`}>{Math.round(analytics.data.summary.load_percent)}%</p><span className="text-xs text-muted">da capacidade semanal</span></div>
             <div className="mt-3"><ProgressBar value={analytics.data.summary.load_percent} tone={analytics.data.summary.load_percent > 100 ? 'crimson' : 'navy'} size="sm" /></div>
@@ -109,13 +112,14 @@ export function Dashboard() {
             <dl className="space-y-3 border-t border-border pt-4 mt-4 text-sm"><div className="flex justify-between gap-3"><dt className="text-graphite">Estudo agendado</dt><dd className="font-medium text-ink tabular-nums">{formatMinutes(analytics.data.summary.planned_study_minutes)}</dd></div><div className="flex justify-between gap-3"><dt className="text-graphite">Dias com estudo</dt><dd className="font-medium text-ink tabular-nums">{analytics.data.summary.active_days}</dd></div></dl>
           </>}
         </Card>
-        {analytics.data && <><PeriodComparison comparison={analytics.data.comparison} compact /><PlanningDiagnostics diagnostics={analytics.data.planning_diagnostics} insights={analytics.data.insights} compact /></>}
-        <Card><div className="flex items-center justify-between gap-3 mb-5"><h2 className="font-serif text-xl font-semibold text-ink">Suas disciplinas</h2><Link to="/subjects" className="text-sm text-graphite hover:text-crimson">Ver todas</Link></div>
+        <Card className="mb-6 break-inside-avoid"><div className="flex items-center justify-between gap-3 mb-5"><h2 className="font-serif text-xl font-semibold text-ink">Suas disciplinas</h2><Link to="/subjects" className="text-sm text-graphite hover:text-crimson">Ver todas</Link></div>
           {subjects.length ? <div className="space-y-5">{subjects.slice(0, 5).map((subject) => <Link key={subject.subject_id} to={`/subjects/${subject.subject_id}`} className="block group"><div className="flex justify-between items-start gap-3 text-sm mb-2"><span className="font-medium text-ink group-hover:text-crimson break-words">{subject.subject_name}</span><span className="text-graphite tabular-nums shrink-0">{Math.round(subject.progress)}%</span></div><ProgressBar value={subject.progress} tone={subject.progress < 40 ? 'crimson' : 'navy'} size="sm" /><p className="text-xs text-muted mt-1.5">{subject.completed_tasks} de {subject.total_tasks} tarefas concluídas</p></Link>)}</div> : <p className="text-sm text-muted">O progresso aparece quando você adiciona tarefas às disciplinas.</p>}
         </Card>
-        <Link to="/insights" className="flex items-center justify-between gap-3 p-5 rounded-lg border border-border text-sm text-ink bg-surface hover:bg-surface-muted"><span><span className="block font-medium">Entenda seu ritmo</span><span className="block text-xs text-muted mt-1">Estudos, consistência e entregas</span></span><ArrowRight size={18} className="text-crimson shrink-0" /></Link>
-      </aside>
-    </div>
+      {analytics.data && <>
+        <div className="mb-6 break-inside-avoid"><PeriodComparison comparison={analytics.data.comparison} compact /></div>
+        <div className="mb-6 break-inside-avoid"><PlanningDiagnostics diagnostics={analytics.data.planning_diagnostics} insights={analytics.data.insights} compact /></div>
+      </>}
+    </section>
     <DashboardWeeklyCharts data={analytics.data} loading={analytics.loading} error={analytics.error} reload={analytics.reload} />
   </div>;
 }
