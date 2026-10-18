@@ -4,6 +4,7 @@ interface TooltipProps {
   label: string;
   children: React.ReactElement;
   side?: 'top' | 'bottom' | 'right';
+  className?: string;
 }
 
 const sideClasses = {
@@ -16,13 +17,13 @@ const sideClasses = {
  * Tooltip simples via hover/focus, sem lib externa — suficiente para labels
  * curtos de botões de ícone (ex.: colapsar sidebar, notificações).
  */
-export const Tooltip: React.FC<TooltipProps> = ({ label, children, side = 'bottom' }) => {
+export const Tooltip: React.FC<TooltipProps> = ({ label, children, side = 'bottom', className = '' }) => {
   const [visible, setVisible] = useState(false);
   const id = useId();
 
   return (
     <span
-      className="relative inline-flex"
+      className={`relative inline-flex ${className}`}
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
       onFocus={() => setVisible(true)}

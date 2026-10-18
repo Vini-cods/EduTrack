@@ -25,7 +25,7 @@ export const DashboardLayout: React.FC = () => {
 
   return (
     <BreadcrumbProvider>
-      <div className="h-screen flex bg-paper overflow-hidden">
+      <div className="h-dvh flex bg-paper overflow-hidden">
         {/* Sidebar fixa no desktop */}
         <div
           className={`hidden lg:block shrink-0 transition-all duration-200 ${collapsed ? 'w-[76px]' : 'w-64'}`}
@@ -38,9 +38,9 @@ export const DashboardLayout: React.FC = () => {
           <Sidebar onNavigate={() => setMobileOpen(false)} />
         </Drawer>
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
           <Topbar onOpenPalette={() => setPaletteOpen(true)} onOpenMobileMenu={() => setMobileOpen(true)} />
-          <main className="flex-1 overflow-y-auto">
+          <main className="min-h-0 flex-1 overflow-y-auto">
             <Outlet />
           </main>
         </div>
