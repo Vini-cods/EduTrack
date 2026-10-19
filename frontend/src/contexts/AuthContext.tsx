@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useReducer, useC
 import apiClient from '../api/client';
 import type { User } from '../types';
 import { authEntryReducer, initialAuthEntry } from '../lib/authEntry';
+import type { ThemePreference } from '../lib/theme';
+import { clearEntryTheme, readEntryTheme, rememberEntryTheme } from '../lib/theme';
 
 interface LoginCredentials {
   email: string;
@@ -20,9 +22,10 @@ interface AuthContextType {
   loading: boolean;
   sessionId: number;
   entryIntroId: number | null;
+  entryTheme: ThemePreference | null;
   completeEntryIntro: (entryId: number) => void;
-  login: (data: LoginCredentials) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  login: (data: LoginCredentials, theme: ThemePreference) => Promise<void>;
+  register: (data: RegisterData, theme: ThemePreference) => Promise<void>;
   logout: () => void;
 }
 
@@ -32,7 +35,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
-  const [entry, dispatchEntry] = useReducer(authEntryReducer, initialAuthEntry);
+  const [entry, dispatchEntry] = useReducer(authEntryReducer, initialAuthEntry, state => ({
+    ...state, theme: token ? readEntryTheme() ?? null : null,
+  }));
   const completeEntryIntro = useCallback((entryId: number) => dispatchEntry({ type: 'complete', entryId }), []);
 
   useEffect(() => {
@@ -46,6 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setToken(null);
           setUser(null);
           dispatchEntry({ type: 'clear' });
+          clearEntryTheme();
           localStorage.removeItem('token');
         })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -55,13 +61,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => controller.abort();
   }, [token]);
 
-  const login = async (data: LoginCredentials) => {
+  const login = async (data: LoginCredentials, theme: ThemePreference) => {
     const formData = new URLSearchParams();
     formData.append('username', data.email);
     formData.append('password', data.password);
 
     const res = await apiClient.post('/auth/login', formData);
-    dispatchEntry({ type: 'authenticated' });
+    rememberEntryTheme(theme);
+    dispatchEntry({ type: 'authenticated', theme });
     if (res.data.access_token !== token) {
       setUser(null);
       setLoading(true);
@@ -70,20 +77,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('token', res.data.access_token);
   };
 
-  const register = async (data: RegisterData) => {
+  const register = async (data: RegisterData, theme: ThemePreference) => {
     await apiClient.post('/auth/register', data);
-    await login({ email: data.email, password: data.password });
+    await login({ email: data.email, password: data.password }, theme);
   };
 
   const logout = () => {
     dispatchEntry({ type: 'clear' });
+    clearEntryTheme();
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, sessionId: entry.sequence, entryIntroId: entry.pendingId, completeEntryIntro, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, sessionId: entry.sequence, entryIntroId: entry.pendingId, entryTheme: entry.theme, completeEntryIntro, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -38,16 +38,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const value = useMemo<ThemeContextValue>(() => {
     const setPreference = (next: ThemePreference) => {
-      if (preferences.authenticated) {
-        if (!preferences.ready) return;
-        void preferences.update({ theme: next }).then((saved) => {
-          if (!saved) toast.error('Tema ainda não salvo. Tente sincronizar em Configurações.');
-        });
-        return;
-      }
+      if (preferences.authenticated && !preferences.ready) return;
       setPreferenceState(next);
       applyTheme(resolveTheme(next, systemDark));
       try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch { /* Tema continua válido sem storage. */ }
+      if (preferences.authenticated) {
+        void preferences.update({ theme: next }).then((saved) => {
+          if (!saved) toast.error('Tema ainda não salvo. Tente sincronizar em Configurações.');
+        });
+      }
     };
     return { preference, resolvedTheme, ready: preferences.ready, setPreference, toggleTheme: () => setPreference(resolvedTheme === 'dark' ? 'light' : 'dark') };
   }, [preference, resolvedTheme, systemDark, preferences]);

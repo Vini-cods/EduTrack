@@ -6,6 +6,7 @@ import { z } from 'zod';
 import axios from 'axios';
 import { ArrowRight, Eye, EyeOff, Lock, Mail, UserRound } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { AuthLayout } from '../components/AuthLayout';
 import { AuthIdentitySummary } from '../components/auth/AuthIdentitySummary';
 import { TextField } from '../components/ui/TextField';
@@ -24,6 +25,7 @@ const schema = z.object({
 type RegisterData = z.infer<typeof schema>;
 export const Register = () => {
   const { register: createAccount } = useAuth();
+  const { preference } = useTheme();
   const navigate = useNavigate();
   const [step, setStep] = useState<'identity' | 'password'>('identity');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,7 +45,7 @@ export const Register = () => {
     if (lock.current) return;
     lock.current = true;
     setError('');
-    try { await createAccount({ name, email, password }); navigate('/dashboard', { replace: true }); }
+    try { await createAccount({ name, email, password }, preference); navigate('/dashboard', { replace: true }); }
     catch (cause) {
       const detail = axios.isAxiosError<{ detail?: unknown }>(cause) ? cause.response?.data.detail : undefined;
       setError(typeof detail === 'string' ? detail : 'Não foi possível criar sua conta. Verifique sua conexão e tente novamente.');

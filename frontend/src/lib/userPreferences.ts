@@ -28,7 +28,7 @@ function mergePatches(first: PreferencesPatch, second: PreferencesPatch): Prefer
   return merged;
 }
 
-/** Cache por proprietário é apenas fallback; a leitura do servidor decide após login. */
+/** Cache por proprietário é fallback; a escolha de tema da entrada é aplicada separadamente. */
 export function readCachedPreferences(userId: number): UserPreferences {
   const defaults = defaultUserPreferences();
   try {
@@ -59,7 +59,7 @@ interface PreferencesTransport {
   patch: (patch: PreferencesPatch, signal: AbortSignal) => Promise<UserPreferences>;
 }
 
-/** Uma instância por login. Nunca grava defaults na hidratação ou responde após dispose. */
+/** Uma instância por login; só transfere o tema de entrada fornecido explicitamente. */
 export class PreferencesSync {
   private controller = new AbortController();
   private dirty: PreferencesPatch = {};
@@ -67,11 +67,13 @@ export class PreferencesSync {
   private disposed = false;
   private transport: PreferencesTransport;
   private notify: (state: PreferencesState) => void;
+  private entryTheme: ThemePreference | undefined;
   state: PreferencesState;
-  constructor(initial: UserPreferences, transport: PreferencesTransport, notify: (state: PreferencesState) => void) {
+  constructor(initial: UserPreferences, transport: PreferencesTransport, notify: (state: PreferencesState) => void, entryTheme?: ThemePreference) {
     this.transport = transport;
     this.notify = notify;
-    this.state = { value: initial, ready: false, saving: false, error: false };
+    this.entryTheme = entryTheme;
+    this.state = { value: entryTheme === undefined ? initial : mergePreferences(initial, { theme: entryTheme }), ready: false, saving: false, error: false };
   }
   private emit(patch: Partial<PreferencesState>): void {
     if (this.disposed) return;
@@ -83,7 +85,13 @@ export class PreferencesSync {
     this.emit({ error: false });
     try {
       const value = await this.transport.read(this.controller.signal);
-      this.emit({ value, ready: true, error: false });
+      if (this.disposed) return;
+      if (this.entryTheme !== undefined && value.theme !== this.entryTheme) {
+        this.dirty = mergePatches(this.dirty, { theme: this.entryTheme });
+      }
+      this.entryTheme = undefined;
+      this.emit({ value: mergePreferences(value, this.dirty), ready: true, error: false });
+      if (Object.keys(this.dirty).length) await this.flush();
     } catch {
       this.emit({ error: true });
     }

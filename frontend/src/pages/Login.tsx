@@ -6,6 +6,7 @@ import { z } from 'zod';
 import axios from 'axios';
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { AuthLayout } from '../components/AuthLayout';
 import { AuthIdentitySummary } from '../components/auth/AuthIdentitySummary';
 import { TextField } from '../components/ui/TextField';
@@ -22,6 +23,7 @@ const schema = z.object({
 type LoginData = z.infer<typeof schema>;
 export const Login = () => {
   const { login } = useAuth();
+  const { preference } = useTheme();
   const navigate = useNavigate();
   const [step, setStep] = useState<'identity' | 'password'>('identity');
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +49,7 @@ export const Login = () => {
     lock.current = true;
     setError('');
     try {
-      await login(data);
+      await login(data, preference);
       navigate('/dashboard', { replace: true });
     } catch (cause) {
       setError(axios.isAxiosError(cause) && cause.response?.status === 401
