@@ -12,6 +12,12 @@ As páginas de entrada usam uma composição completa em `components/auth/AuthBr
 
 As imagens foram refinadas pela ferramenta image_gen integrada (skill imagegen). Os SVGs de apresentação incorporam a máscara raster do PNG (1254 × 1254 pixels); não são uma vetorização Bézier. A interface utiliza a mesma silhueta em CSS mask, com preenchimento sólido crimson no tema claro e off-white no tema escuro, evitando alterações de forma entre versões. O JPEG original permanece preservado em ../edutrack-logo.jpeg.
 
+## Vídeo de entrada
+
+Os arquivos em `../intro/` derivam do vídeo de 10 segundos enviado pelo usuário. A versão clara preserva as cores originais; a escura adapta a luminância para fundo navy #10141b e marca crimson clara #f29ba2. Ambas preservam a animação, a resolução de 1280 × 720, os 24 fps e a trilha AAC original. Os MP4 usam H.264/yuv420p e metadados de reprodução no início do arquivo (fast start). Os JPEGs são quadros finais para a prévia e a apresentação sem movimento.
+
+A conversão foi feita com FFmpeg temporário, sem adicionar dependências ao projeto. O arquivo original do usuário não foi alterado. A introdução inicia sem som; o usuário pode ativá-lo ou pular a apresentação.
+
 Prompts finais dos PNGs selecionados:
 
 ## crimson
