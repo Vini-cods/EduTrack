@@ -15,7 +15,7 @@ Este README é a referência principal de instalação, arquitetura e uso técni
 | Study Planner e Focus | Objetivos, reserva de blocos, Pomodoro, pausa/retomada e segmentos ativos para distribuir estudo entre dias. |
 | Notes e Materials | Anotações de texto simples com tags e contexto; referências de estudo por URL, disciplina e status; busca sem acentos e paginação no servidor. |
 | Academic Load e Insights | Comparação de intervalos equivalentes, calendário de consistência, padrões de sessões por dia/hora, média/mediana, cobertura do planejamento, sobrecarga, distribuição por disciplina e exportação CSV. |
-| Navegação e aparência | Command Palette (`Ctrl+K`/`Cmd+K`) com busca; temas claro/escuro/sistema, capacidade e configurações Pomodoro persistidos por conta; layout responsivo e respeito a `prefers-reduced-motion`. |
+| Navegação e aparência | Command Palette (`Ctrl+K`/`Cmd+K`) com busca; o tema claro/escuro/sistema escolhido no acesso continua no vídeo e no Dashboard e sincroniza com a conta; capacidade/Pomodoro persistidos por conta; layout responsivo e respeito a `prefers-reduced-motion`. |
 | Acesso | Login e cadastro em etapas; autenticação JWT e recuperação de senha por e-mail quando SMTP estiver configurado. |
 
 ## Stack e requisitos
