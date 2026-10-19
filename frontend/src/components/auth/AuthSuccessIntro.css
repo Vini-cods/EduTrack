@@ -1,0 +1,23 @@
+.auth-success-intro {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+}
+
+.auth-success-intro[data-intro-theme="dark"] { background: #10141b; }
+
+.auth-success-intro-media { width: min(100%, 1280px, max(160px, calc((100dvh - 160px) * 16 / 9))); min-width: 0; }
+.auth-success-intro-video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; }
+
+.auth-success-intro-controls {
+  width: 100%;
+  padding: 1rem max(1rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .75rem;
+  text-align: center;
+}

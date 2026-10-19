@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useReducer, useCallback } from 'react';
 import apiClient from '../api/client';
 import type { User } from '../types';
+import { authEntryReducer, initialAuthEntry } from '../lib/authEntry';
 
 interface LoginCredentials {
   email: string;
@@ -17,6 +18,9 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
+  sessionId: number;
+  entryIntroId: number | null;
+  completeEntryIntro: (entryId: number) => void;
   login: (data: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
@@ -28,6 +32,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [entry, dispatchEntry] = useReducer(authEntryReducer, initialAuthEntry);
+  const completeEntryIntro = useCallback((entryId: number) => dispatchEntry({ type: 'complete', entryId }), []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -39,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (controller.signal.aborted) return;
           setToken(null);
           setUser(null);
+          dispatchEntry({ type: 'clear' });
           localStorage.removeItem('token');
         })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -54,6 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     formData.append('password', data.password);
 
     const res = await apiClient.post('/auth/login', formData);
+    dispatchEntry({ type: 'authenticated' });
     if (res.data.access_token !== token) {
       setUser(null);
       setLoading(true);
@@ -68,13 +76,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    dispatchEntry({ type: 'clear' });
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, sessionId: entry.sequence, entryIntroId: entry.pendingId, completeEntryIntro, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

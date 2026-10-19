@@ -13,10 +13,10 @@ interface PreferencesContextValue extends PreferencesState {
 const Context = createContext<PreferencesContextValue | null>(null);
 
 export function UserPreferencesProvider({ children }: { children: ReactNode }) {
-  const { user, token } = useAuth();
+  const { user, token, sessionId } = useAuth();
   const ownerId = user?.id;
   const syncRef = useRef<PreferencesSync | null>(null);
-  const [ownedState, setOwnedState] = useState<{ ownerId: number; state: PreferencesState } | null>(null);
+  const [ownedState, setOwnedState] = useState<{ ownerId: number; token: string; sessionId: number; state: PreferencesState } | null>(null);
 
   useEffect(() => {
     if (ownerId === undefined || !token) { syncRef.current = null; return; }
@@ -26,18 +26,18 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
       read: async (signal) => (await apiClient.get<UserPreferences>('/preferences/', { headers, signal, timeout: 10_000 })).data,
       patch: async (patch, signal) => (await apiClient.patch<UserPreferences>('/preferences/', patch, { headers, signal, timeout: 10_000 })).data,
     }, (state) => {
-      setOwnedState({ ownerId, state });
+      setOwnedState({ ownerId, token, sessionId, state });
       if (state.ready && !state.error && !state.saving) cachePreferences(ownerId, state.value);
     });
     syncRef.current = sync;
-    setOwnedState({ ownerId, state: sync.state });
+    setOwnedState({ ownerId, token, sessionId, state: sync.state });
     void sync.load();
     return () => { sync.dispose(); if (syncRef.current === sync) syncRef.current = null; };
-  }, [ownerId, token]);
+  }, [ownerId, token, sessionId]);
 
   const update = useCallback((patch: PreferencesPatch) => syncRef.current?.update(patch) ?? Promise.resolve(false), []);
   const retry = useCallback(() => { void syncRef.current?.retry(); }, []);
-  const state = ownerId !== undefined && ownedState?.ownerId === ownerId ? ownedState.state
+  const state = ownerId !== undefined && ownedState?.ownerId === ownerId && ownedState.token === token && ownedState.sessionId === sessionId ? ownedState.state
     : { value: defaultUserPreferences(), ready: ownerId === undefined, saving: false, error: false };
   return <Context.Provider value={{ ...state, authenticated: ownerId !== undefined, update, retry }}>{children}</Context.Provider>;
 }
