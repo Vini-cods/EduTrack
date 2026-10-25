@@ -1,9 +1,10 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 19/10/2026.
+Atualizado em 24/10/2026.
 
 ## Entrega atual
 
+- Documentação de 24/10: [openspec.md](../openspec.md) reconstrói os 57 commits alcançáveis de main até 0776ce2, com diferenças reais, validações históricas, substituições, catálogo dos 307 arquivos versionados naquele corte, contratos HTTP, cadeia de migrations e backlog pendente. O antigo openspec curto e sua remoção também são registrados. README, estado de desenvolvimento e guia operacional conservam seus papéis; nenhuma funcionalidade ou dado foi alterado nesta rodada.
 - Entrada de 19/10: o tema escolhido no login/cadastro prevalece sobre o tema anteriormente salvo da conta e continua no vídeo e no Dashboard. Após ler as preferências reais, somente o campo theme é sincronizado com essa escolha; capacidade e Pomodoro são preservados. Há versões clara/escura de cerca de 10 segundos. A apresentação preenche o viewport, sem textos ou controles sobrepostos, e segue automaticamente para o Dashboard. Inicia sem som; Escape permanece disponível. Recarregar uma sessão existente não repete o vídeo.
 - A introdução aguarda a validação da sessão, mas já recebe o tema da entrada no primeiro render, sem esperar o GET das preferências. A escolha fica fixa durante o clipe. Uma intenção provisória cobre reload antes de /auth/me e depois passa a ser isolada por proprietário até a confirmação do servidor. Falhas de leitura/gravação não trocam a aparência escolhida. Proprietário, token e geração da autenticação isolam a hidratação; callbacks antigos não liberam outra entrada. Com movimento reduzido, não monta vídeo e segue automaticamente.
 - Evolução temporal de 18/10: Task.completed_at e TaskStatusEvent registram conclusões/reaberturas prospectivas. Transições usam atualização condicional e o reenvio do mesmo estado não duplica eventos; tarefas antigas concluídas continuam com data desconhecida. StudySegment preserva intervalos ativos fechados em pausa/finalização, com controle de concorrência nas transições de pausa, retomada e término.
@@ -100,6 +101,8 @@ No cronograma, editar altera uma ocorrência; para substituir a grade inteira, e
 Faça backup antes de atualizar um banco de uso real. Backups locais ficam em backend/.backups, fora do versionamento. Bancos com sessões ativas duplicadas precisam resolver as sessões extras explicitamente antes da migração c218.
 
 ## Validação e execução
+
+Rodada documental de 24/10: auditoria estática do histórico e do código, com conferência de hashes/pais, cobertura dos commits e arquivos, links e cadeia de migrations. As evidências de testes anteriores continuam identificadas como históricas. Não foram executados testes da aplicação, builds, migrations, SMTP ou publicação para gerar este backlog; a validação desta entrega é a consistência documental.
 
 Correção da origem do tema em 19/10: `npm run build` aprovado (TypeScript; 2.685 módulos e etapa Vite em 3,96 s), além de 30/30 testes focados em 3,73 s. Os testes cobrem preferências remotas opostas, preservação de capacidade/Pomodoro, ausência de PATCH desnecessário, falhas GET/PATCH e retry, reload com intenção pendente/provisória, armazenamento parcial/bloqueado, logout e alterações posteriores. A revisão independente também conferiu o primeiro render, a janela pré-/auth/me e a limpeza das intenções confirmadas. A suíte backend não foi repetida: não houve mudança de API/model/migration.
 
