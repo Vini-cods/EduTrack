@@ -1,10 +1,11 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 24/10/2026.
+Atualizado em 27/10/2026.
 
 ## Entrega atual
 
-- Documentação de 24/10: [openspec.md](../openspec.md) reconstrói os 57 commits alcançáveis de main até 0776ce2, com diferenças reais, validações históricas, substituições, catálogo dos 307 arquivos versionados naquele corte, contratos HTTP, cadeia de migrations e backlog pendente. O antigo openspec curto e sua remoção também são registrados. README, estado de desenvolvimento e guia operacional conservam seus papéis; nenhuma funcionalidade ou dado foi alterado nesta rodada.
+- Guia de 27/10: [openspec.md](../openspec.md) foi reformulado como manual operacional inspirado no exemplo fornecido pelo usuário, adaptado à stack React/FastAPI. Reúne regras de domínio/arquitetura, tema, UX/motion, segurança, escopo, Git, fluxo orientado por especificação, modelos e definição de pronto. Acrescenta seis propostas de produto explicitamente futuras, sem alterar funcionalidades, dependências ou instalar CLI/hooks.
+- A auditoria documental de 24/10 foi preservada em [HISTORY.md](HISTORY.md), mantendo os 57 commits até 0776ce2 e o catálogo dos 307 arquivos daquele corte. A reorganização de 27/10 corrige os links relativos e distingue o guia operacional do levantamento histórico; README e AGENTS apontam para seus papéis atuais.
 - Entrada de 19/10: o tema escolhido no login/cadastro prevalece sobre o tema anteriormente salvo da conta e continua no vídeo e no Dashboard. Após ler as preferências reais, somente o campo theme é sincronizado com essa escolha; capacidade e Pomodoro são preservados. Há versões clara/escura de cerca de 10 segundos. A apresentação preenche o viewport, sem textos ou controles sobrepostos, e segue automaticamente para o Dashboard. Inicia sem som; Escape permanece disponível. Recarregar uma sessão existente não repete o vídeo.
 - A introdução aguarda a validação da sessão, mas já recebe o tema da entrada no primeiro render, sem esperar o GET das preferências. A escolha fica fixa durante o clipe. Uma intenção provisória cobre reload antes de /auth/me e depois passa a ser isolada por proprietário até a confirmação do servidor. Falhas de leitura/gravação não trocam a aparência escolhida. Proprietário, token e geração da autenticação isolam a hidratação; callbacks antigos não liberam outra entrada. Com movimento reduzido, não monta vídeo e segue automaticamente.
 - Evolução temporal de 18/10: Task.completed_at e TaskStatusEvent registram conclusões/reaberturas prospectivas. Transições usam atualização condicional e o reenvio do mesmo estado não duplica eventos; tarefas antigas concluídas continuam com data desconhecida. StudySegment preserva intervalos ativos fechados em pausa/finalização, com controle de concorrência nas transições de pausa, retomada e término.
@@ -101,6 +102,8 @@ No cronograma, editar altera uma ocorrência; para substituir a grade inteira, e
 Faça backup antes de atualizar um banco de uso real. Backups locais ficam em backend/.backups, fora do versionamento. Bancos com sessões ativas duplicadas precisam resolver as sessões extras explicitamente antes da migração c218.
 
 ## Validação e execução
+
+Rodada documental de 27/10: revisão do guia contra a implementação e as regras existentes, conferência dos links, exemplos Markdown, distinção entre propostas e funcionalidades entregues e preservação do histórico movido. O anexo foi tratado como referência de formato, sem adotar FlutterFlow/Xano, comandos, hooks ou regras de precedência de outro projeto. Não foram executados testes da aplicação, builds, migrations, envio de mensagens ou deploy: a entrega altera somente documentação.
 
 Rodada documental de 24/10: auditoria estática do histórico e do código, com conferência de hashes/pais, cobertura dos commits e arquivos, links e cadeia de migrations. As evidências de testes anteriores continuam identificadas como históricas. Não foram executados testes da aplicação, builds, migrations, SMTP ou publicação para gerar este backlog; a validação desta entrega é a consistência documental.
 

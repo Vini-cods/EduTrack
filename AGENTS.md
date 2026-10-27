@@ -8,3 +8,4 @@
 - Valide frontend com type-check/build e testes relevantes. Para API/model/migrations, execute testes backend correspondentes e a suíte completa quando houver mudanças transversais.
 - Mantenha `docs/DEVELOPMENT_STATUS.md` fiel ao código: implementação, validações realizadas, limitações reais e próximas prioridades.
 - Respeite teclado, estados de loading/erro/vazio, temas claro/escuro, responsividade e `prefers-reduced-motion`.
+- Consulte `openspec.md` para padrões de produto/engenharia e modelos de especificação. As ideias marcadas como propostas não ampliam automaticamente o escopo pedido pelo usuário.

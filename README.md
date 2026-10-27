@@ -4,7 +4,7 @@ Plataforma de organização acadêmica para estudantes universitários e de curs
 
 Este README é a referência principal de instalação, arquitetura e uso técnico. O [estado de desenvolvimento](docs/DEVELOPMENT_STATUS.md) registra as validações realizadas, decisões recentes e próximas prioridades.
 
-O [OpenSpec — backlog e especificações](openspec.md) reúne a evolução por commit, os módulos e contratos implementados, as decisões técnicas e as pendências com critérios de conclusão. Cada edição fixa um corte do histórico para manter a rastreabilidade.
+O [OpenSpec — guia de desenvolvimento](openspec.md) define regras de produto e engenharia, fluxo de especificação, modelos de requisitos/tarefas, critérios de pronto e propostas de evolução. A auditoria por commit e o catálogo do corte histórico foram preservados em [Histórico técnico](docs/HISTORY.md).
 
 ## O produto
 
