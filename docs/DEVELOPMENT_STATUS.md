@@ -1,9 +1,10 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 27/10/2026.
+Atualizado em 28/10/2026.
 
 ## Entrega atual
 
+- Correção de materiais em 28/10: atualizações rejeitam `null` explícito em `title`, `category`, `status` e `subject_id` com 422 antes de alterar dados. Campos obrigatórios omitidos continuam preservados; `url` e `description` ainda podem ser limpos com `null`. Quatro regressões reproduziram três respostas 500 e uma 404 na versão anterior; após a correção, 18/18 testes de materiais passaram em 3,41 s, incluindo preservação e isolamento entre duas contas. Revisão independente também conferiu omissão, rejeição de nulos e atualizações parciais válidas. Não houve alteração de model/migration ou banco real; a suíte backend completa não foi repetida porque a mudança é restrita ao schema de atualização de materiais.
 - Guia de 27/10: [openspec.md](../openspec.md) foi reformulado como manual operacional inspirado no exemplo fornecido pelo usuário, adaptado à stack React/FastAPI. Reúne regras de domínio/arquitetura, tema, UX/motion, segurança, escopo, Git, fluxo orientado por especificação, modelos e definição de pronto. Acrescenta seis propostas de produto explicitamente futuras, sem alterar funcionalidades, dependências ou instalar CLI/hooks.
 - A auditoria documental de 24/10 foi preservada em [HISTORY.md](HISTORY.md), mantendo os 57 commits até 0776ce2 e o catálogo dos 307 arquivos daquele corte. A reorganização de 27/10 corrige os links relativos e distingue o guia operacional do levantamento histórico; README e AGENTS apontam para seus papéis atuais.
 - Entrada de 19/10: o tema escolhido no login/cadastro prevalece sobre o tema anteriormente salvo da conta e continua no vídeo e no Dashboard. Após ler as preferências reais, somente o campo theme é sincronizado com essa escolha; capacidade e Pomodoro são preservados. Há versões clara/escura de cerca de 10 segundos. A apresentação preenche o viewport, sem textos ou controles sobrepostos, e segue automaticamente para o Dashboard. Inicia sem som; Escape permanece disponível. Recarregar uma sessão existente não repete o vídeo.

@@ -1,5 +1,8 @@
 """Testes de materiais de estudo: CRUD, cascata e isolamento."""
 
+import pytest
+from fastapi.testclient import TestClient
+
 from tests.conftest import make_auth_headers
 
 
@@ -50,6 +53,45 @@ def test_update_material(client, auth_headers, subject):
     resp = client.put(f"/api/v1/materials/{material['id']}", json={"title": "M atualizado", "url": "https://novo.com"}, headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["title"] == "M atualizado"
+
+
+@pytest.mark.parametrize("field", ["title", "category", "status", "subject_id"])
+def test_update_material_rejects_null_required_fields_and_preserves_data(client, academic_data, field):
+    owner, other = academic_data["owner"], academic_data["other"]
+    original = {"title": "Slides", "category": "pdf", "status": "estudando",
+                "subject_id": owner["subject_id"], "url": "https://example.com/slides.pdf",
+                "description": "Conteúdo preservado"}
+    material = client.post("/api/v1/materials/", json=original, headers=owner["headers"]).json()
+    other_material = client.post("/api/v1/materials/", json={"title": "Material de outra conta",
+                                 "subject_id": other["subject_id"]}, headers=other["headers"]).json()
+
+    # Também verifica o contrato HTTP quando uma falha inesperada do servidor ocorre.
+    response = TestClient(client.app, raise_server_exceptions=False).put(
+        f"/api/v1/materials/{material['id']}",
+        json={field: None, "description": "Não deve ser gravado"}, headers=owner["headers"],
+    )
+    assert response.status_code == 422
+
+    owned_items = client.get("/api/v1/materials/", headers=owner["headers"]).json()
+    assert len(owned_items) == 1
+    assert {key: owned_items[0][key] for key in original} == original
+    other_items = client.get("/api/v1/materials/", headers=other["headers"]).json()
+    assert len(other_items) == 1
+    assert other_items[0]["id"] == other_material["id"]
+    assert other_items[0]["title"] == "Material de outra conta"
+
+
+def test_update_material_can_clear_optional_fields_and_omit_required_fields(client, academic_data):
+    owner = academic_data["owner"]
+    original = {"title": "Slides", "category": "pdf", "status": "estudando", "subject_id": owner["subject_id"]}
+    material = client.post("/api/v1/materials/", json={**original, "url": "https://example.com/slides.pdf",
+                           "description": "Texto anterior"}, headers=owner["headers"]).json()
+    response = client.put(f"/api/v1/materials/{material['id']}", json={"url": None, "description": None},
+                          headers=owner["headers"])
+    assert response.status_code == 200
+    assert {key: response.json()[key] for key in original} == original
+    assert response.json()["url"] is None
+    assert response.json()["description"] is None
 
 
 def test_update_material_status(client, auth_headers, subject):
