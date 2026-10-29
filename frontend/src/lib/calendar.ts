@@ -11,6 +11,20 @@ export const CATEGORY_META: Record<EventCategory, { label: string; color: string
 
 export const WEEKDAY_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
+/** Avança o período local sem deixar dias 29–31 saltarem o mês de destino. */
+export function shiftCalendarPeriod(anchor: Date, view: 'month' | 'week' | 'day', direction: 1 | -1): Date {
+  const next = new Date(anchor);
+  if (view === 'month') {
+    const targetMonth = next.getMonth() + direction;
+    const lastDay = new Date(next);
+    lastDay.setMonth(targetMonth + 1, 0);
+    next.setMonth(targetMonth, Math.min(anchor.getDate(), lastDay.getDate()));
+  } else {
+    next.setDate(next.getDate() + direction * (view === 'week' ? 7 : 1));
+  }
+  return next;
+}
+
 /** Grade completa do mês (42 dias = 6 semanas), incluindo dias de meses vizinhos para preencher a grade. */
 export function getMonthGrid(monthDate: Date): Date[] {
   const year = monthDate.getFullYear();
