@@ -84,11 +84,10 @@ export interface PositionedEvent {
 }
 
 /**
- * Layout de eventos sobrepostos num único dia: agrupa eventos que se
- * sobrepõem no tempo em "clusters" e, dentro de cada cluster, atribui
- * colunas por um algoritmo guloso (mesma ideia usada por calendários como o
- * Google Calendar) — evita que dois eventos no mesmo horário se sobreponham
- * visualmente, sem precisar de uma biblioteca de layout.
+ * Layout de eventos num único dia: agrupa os retângulos que compartilham
+ * espaço visual, incluindo a altura mínima dos blocos curtos. Dentro de
+ * cada grupo, atribui colunas por um algoritmo guloso para que os botões
+ * não se cubram. A altura visual não altera os horários reais do evento.
  *
  * Eventos sem `end_datetime` recebem 1h de duração visual por padrão.
  */
@@ -107,43 +106,48 @@ export function layoutDayEvents(events: CalendarEventWithSubject[], day?: Date):
         end: gridEnd && end > gridEnd ? gridEnd : end };
     })
     .filter((item) => item.end > item.start)
-    .sort((a, b) => a.start.getTime() - b.start.getTime());
+    .map((item) => {
+      const top = timeToY(item.start);
+      const height = Math.max((item.end.getTime() - item.start.getTime()) / 3_600_000 * HOUR_HEIGHT, 22);
+      return { ...item, top, height, bottom: top + height };
+    })
+    .sort((a, b) => a.top - b.top || a.start.getTime() - b.start.getTime());
 
   const clusters: (typeof items)[] = [];
   let current: typeof items = [];
-  let clusterEnd = -Infinity;
+  let clusterBottom = -Infinity;
   for (const item of items) {
-    if (current.length === 0 || item.start.getTime() < clusterEnd) {
+    if (current.length === 0 || item.top < clusterBottom) {
       current.push(item);
-      clusterEnd = Math.max(clusterEnd, item.end.getTime());
+      clusterBottom = Math.max(clusterBottom, item.bottom);
     } else {
       clusters.push(current);
       current = [item];
-      clusterEnd = item.end.getTime();
+      clusterBottom = item.bottom;
     }
   }
   if (current.length) clusters.push(current);
 
   const result: PositionedEvent[] = [];
   for (const cluster of clusters) {
-    const columnEnds: number[] = [];
+    const columnBottoms: number[] = [];
     for (const item of cluster) {
-      let col = columnEnds.findIndex((end) => end <= item.start.getTime());
+      let col = columnBottoms.findIndex((bottom) => bottom <= item.top);
       if (col === -1) {
-        col = columnEnds.length;
-        columnEnds.push(item.end.getTime());
+        col = columnBottoms.length;
+        columnBottoms.push(item.bottom);
       } else {
-        columnEnds[col] = item.end.getTime();
+        columnBottoms[col] = item.bottom;
       }
       result.push({
         event: item.event,
-        top: timeToY(item.start),
-        height: Math.max((item.end.getTime() - item.start.getTime()) / 3_600_000 * HOUR_HEIGHT, 22),
+        top: item.top,
+        height: item.height,
         column: col,
         totalColumns: 0, // preenchido abaixo, depois que sabemos o total do cluster
       });
     }
-    const totalColumns = columnEnds.length;
+    const totalColumns = columnBottoms.length;
     for (let i = result.length - cluster.length; i < result.length; i++) {
       result[i].totalColumns = totalColumns;
     }
