@@ -1,6 +1,6 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 28/10/2026.
+Atualizado em 29/10/2026.
 
 ## Entrega atual
 
