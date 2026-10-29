@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models.material import MaterialCategory, MaterialStatus
 
@@ -28,6 +28,13 @@ class MaterialUpdate(BaseModel):
     url: Optional[str] = None
     description: Optional[str] = None
     subject_id: Optional[int] = None
+
+    @field_validator("title", "category", "status", "subject_id")
+    @classmethod
+    def required_fields_cannot_be_null(cls, value):
+        if value is None:
+            raise ValueError("O campo não pode ser nulo")
+        return value
 
 
 class MaterialStatusUpdate(BaseModel):
