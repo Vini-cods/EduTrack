@@ -152,6 +152,8 @@ export const TimeGrid: React.FC<TimeGridProps> = ({ days, events, onSlotClick, o
                 return (
                   <button
                     key={calendarItemKey(event)}
+                    title={`${event.title} · ${formatTimeRange(event)}`}
+                    aria-label={`Editar evento ${event.title} · ${formatTimeRange(event)}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onEventClick(event);
