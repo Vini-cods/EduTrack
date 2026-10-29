@@ -40,7 +40,8 @@ export function NoteEditor({ note, subjects, tasks, sessions, onClose, onSaved }
   };
   const linkedSession = origin.startsWith('session:') ? sessions.find(session => session.id === Number(origin.split(':')[1])) : undefined;
   const sourceId = origin ? Number(origin.split(':')[1]) : null;
-  const lockedSubject = origin.startsWith('task:') || Boolean(linkedSession?.subject_id || (origin === initialOrigin && note?.subject_id));
+  const lockedSubject = origin.startsWith('task:') || (origin.startsWith('session:')
+    && Boolean(linkedSession?.subject_id || (origin === initialOrigin && note?.subject_id)));
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (lock.current) return;
