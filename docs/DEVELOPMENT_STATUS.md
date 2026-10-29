@@ -1,6 +1,6 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 28/10/2026.
+Atualizado em 29/10/2026.
 
 ## Entrega atual
 
@@ -105,6 +105,8 @@ No cronograma, editar altera uma ocorrência; para substituir a grade inteira, e
 Faça backup antes de atualizar um banco de uso real. Backups locais ficam em backend/.backups, fora do versionamento. Bancos com sessões ativas duplicadas precisam resolver as sessões extras explicitamente antes da migração c218.
 
 ## Validação e execução
+
+Correção de títulos de materiais em 29/10: criação e atualização normalizam espaços Unicode e aceitam de 1 a 255 pontos de código, com validação equivalente no formulário e na API. Os erros do formulário são associados ao campo; um título rejeitado não fecha o editor. Registros legados continuam legíveis e uma atualização sem título mantém o valor anterior. Nove regressões iniciais reproduziram a falha; a revisão identificou ainda a diferença entre U+0085 e U+FEFF, corrigida com normalização compartilhada e dois casos adicionais. Passaram 38/38 testes backend de materiais e 4/4 testes frontend focados. No QA fictício, espaços e 256 caracteres foram rejeitados, o editor preservou o rascunho e um título com espaços/U+0085 foi salvo normalizado e confirmado após recarregar. Sem alteração de model, migration ou dados reais.
 
 Correção da grade em 28/10: o layout usa os retângulos visuais, incluindo a altura mínima de 22 px, para distribuir eventos em colunas; horários reais e intervalos persistidos permanecem intactos. Três regressões novas cobrem blocos curtos adjacentes, reutilização de coluna/largura e adjacência normal. Antes, duas regressões falharam; depois, 14/14 testes focados de grade/projeção passaram. Revisão independente não encontrou bloqueios. No QA com SQLite e conta fictícios, eventos de 10:00–10:05 e 10:05–10:10 ficaram em colunas distintas nas visões diária e semanal. Ambos abriram por clique/Enter com os horários preservados. Em 390 px, os botões mediram cerca de 139,5 × 22 px e a página manteve largura de 390 px, sem transbordamento global. Temas claro/escuro foram conferidos; essa rodada não equivale a uma auditoria completa de acessibilidade.
 

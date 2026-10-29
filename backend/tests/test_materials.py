@@ -134,3 +134,70 @@ def test_user_cannot_update_or_delete_other_users_material(client, auth_headers,
     other_headers = make_auth_headers(client, "outro-mat3@example.com")
     assert client.put(f"/api/v1/materials/{material['id']}", json={"title": "hack"}, headers=other_headers).status_code == 404
     assert client.delete(f"/api/v1/materials/{material['id']}", headers=other_headers).status_code == 404
+
+
+@pytest.mark.parametrize("title", ["", " \t\n ", "\u0085", "x" * 256, "📚" * 256, "\ufeff" + "x" * 255 + "\ufeff"])
+def test_create_material_rejects_invalid_title_without_persisting(client, academic_data, title):
+    owner = academic_data["owner"]
+    response = client.post("/api/v1/materials/", json={"title": title, "subject_id": owner["subject_id"]},
+                           headers=owner["headers"])
+    assert response.status_code == 422
+    assert client.get("/api/v1/materials/", headers=owner["headers"]).json() == []
+
+
+@pytest.mark.parametrize("title", ["", " \t\n ", "\u0085", "x" * 256, "📚" * 256, "\ufeff" + "x" * 255 + "\ufeff"])
+def test_update_material_rejects_invalid_title_and_preserves_both_accounts(client, academic_data, title):
+    owner, other = academic_data["owner"], academic_data["other"]
+    original = {"title": "Slides preservados", "subject_id": owner["subject_id"], "description": "Original"}
+    material = client.post("/api/v1/materials/", json=original, headers=owner["headers"]).json()
+    other_material = client.post("/api/v1/materials/", json={"title": "Material de outra conta",
+                                 "subject_id": other["subject_id"]}, headers=other["headers"]).json()
+    response = client.put(f"/api/v1/materials/{material['id']}",
+                          json={"title": title, "description": "Não deve ser salvo"}, headers=owner["headers"])
+    assert response.status_code == 422
+    owned = client.get("/api/v1/materials/", headers=owner["headers"]).json()
+    assert {field: owned[0][field] for field in original} == original
+    assert client.get("/api/v1/materials/", headers=other["headers"]).json()[0]["id"] == other_material["id"]
+
+
+@pytest.mark.parametrize("title, expected", [(" \t Slides de revisão \n ", "Slides de revisão"),
+                                            ("📚" * 255, "📚" * 255),
+                                            ("\u0085" + "x" * 255 + "\u0085", "x" * 255),
+                                            (" \ufeffSlides\ufeff\n", "\ufeffSlides\ufeff"),
+                                            ("\ufeff", "\ufeff")])
+def test_material_title_normalizes_edges_and_accepts_unicode_limit(client, academic_data, title, expected):
+    owner = academic_data["owner"]
+    created = client.post("/api/v1/materials/", json={"title": title, "subject_id": owner["subject_id"]},
+                          headers=owner["headers"])
+    assert created.status_code == 201
+    assert created.json()["title"] == expected
+    updated = client.put(f"/api/v1/materials/{created.json()['id']}", json={"title": title}, headers=owner["headers"])
+    assert updated.status_code == 200
+    assert updated.json()["title"] == expected
+
+
+@pytest.mark.parametrize("legacy_title", ["", "   ", "x" * 256])
+def test_legacy_material_title_remains_readable_and_allows_partial_update(client, academic_data, legacy_title):
+    from app.models.material import Material
+    from tests.conftest import TestingSessionLocal
+
+    owner, other = academic_data["owner"], academic_data["other"]
+    with TestingSessionLocal() as db:
+        material = Material(user_id=owner["user_id"], subject_id=owner["subject_id"], title=legacy_title)
+        db.add(material)
+        db.commit()
+        material_id = material.id
+
+    listed = client.get("/api/v1/materials/", headers=owner["headers"])
+    assert listed.status_code == 200
+    assert listed.json()[0]["title"] == legacy_title
+    page = client.get("/api/v1/materials/page", headers=owner["headers"])
+    assert page.status_code == 200
+    assert page.json()["items"][0]["title"] == legacy_title
+    updated = client.put(f"/api/v1/materials/{material_id}", json={"description": "Campo opcional atualizado"},
+                         headers=owner["headers"])
+    assert updated.status_code == 200
+    assert updated.json()["title"] == legacy_title
+    assert updated.json()["description"] == "Campo opcional atualizado"
+    assert client.put(f"/api/v1/materials/{material_id}", json={"title": "Outra conta"},
+                      headers=other["headers"]).status_code == 404

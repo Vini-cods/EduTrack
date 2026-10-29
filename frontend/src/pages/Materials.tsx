@@ -15,7 +15,7 @@ import { Tabs } from '../components/ui/Tabs';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { StatCardSkeleton } from '../components/ui/Skeleton';
-import { CATEGORY_META, MATERIAL_CATEGORIES, STATUS_META, MATERIAL_STATUSES } from '../lib/materials';
+import { CATEGORY_META, MATERIAL_CATEGORIES, STATUS_META, MATERIAL_STATUSES, normalizeMaterialTitle, validateMaterialTitle } from '../lib/materials';
 
 type StatusTab = 'todos' | MaterialStatus;
 
@@ -392,7 +392,7 @@ const MaterialModal: React.FC<{
   onSaved: () => void;
 }> = ({ open, onClose, subjects, subjectsLoading, subjectsError, onRetrySubjects, material, defaultSubjectId, onSaved }) => {
   const isEditing = !!material;
-  const { register, handleSubmit, reset } = useForm<MaterialFormValues>();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<MaterialFormValues>();
   const [saving, setSaving] = useState(false);
   const savingLock = useRef(false);
 
@@ -416,7 +416,7 @@ const MaterialModal: React.FC<{
     savingLock.current = true;
     setSaving(true);
     const payload = {
-      title: values.title,
+      title: normalizeMaterialTitle(values.title),
       subject_id: Number(values.subject_id),
       category: values.category,
       url: values.url || null,
@@ -448,12 +448,16 @@ const MaterialModal: React.FC<{
         {!subjectsLoading && !subjectsError && subjects.length === 0 && <p className="mb-4 text-sm text-graphite">Cadastre uma disciplina antes de adicionar materiais.</p>}
         <fieldset disabled={saving} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Título</label>
+            <label htmlFor="material-title" className="block text-sm font-medium text-graphite mb-1.5">Título</label>
             <input
-              {...register('title', { required: true })}
+              id="material-title"
+              {...register('title', { validate: value => validateMaterialTitle(value) || true })}
+              aria-invalid={errors.title ? true : undefined}
+              aria-describedby={errors.title ? 'material-title-error' : undefined}
               placeholder="Ex.: Slides da aula 3"
               className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
             />
+            {errors.title && <p id="material-title-error" role="alert" className="mt-1.5 text-sm text-danger">{errors.title.message}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

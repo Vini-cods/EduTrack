@@ -1,11 +1,13 @@
 """Schemas Pydantic para materiais de estudo."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
 from app.models.material import MaterialCategory, MaterialStatus
+
+MaterialTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 
 
 class MaterialBase(BaseModel):
@@ -18,11 +20,11 @@ class MaterialBase(BaseModel):
 
 
 class MaterialCreate(MaterialBase):
-    pass
+    title: MaterialTitle
 
 
 class MaterialUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[MaterialTitle] = None
     category: Optional[MaterialCategory] = None
     status: Optional[MaterialStatus] = None
     url: Optional[str] = None
