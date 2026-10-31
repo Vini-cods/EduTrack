@@ -51,12 +51,14 @@ export const SubjectDetail: React.FC = () => {
     const options = { signal: controller.signal };
     Promise.all([
       apiClient.get<Subject>(`/subjects/${id}`, options),
-      apiClient.get<Task[]>(`/tasks/subject/${id}`, options),
+      apiClient.get<Task[]>('/tasks/', options),
       apiClient.get<Material[]>(`/materials/subject/${id}`, options),
       apiClient.get<Subject[]>('/subjects/', options),
     ]).then(([subjectResponse, tasksResponse, materialsResponse, allResponse]) => {
       if (controller.signal.aborted) return;
-      setSubject(subjectResponse.data); setTasks(tasksResponse.data); setMaterials(materialsResponse.data);
+      setSubject(subjectResponse.data);
+      setTasks(tasksResponse.data.filter(task => task.subject_id === subjectResponse.data.id));
+      setMaterials(materialsResponse.data);
       setAllSubjects(allResponse.data.some(item => item.id === subjectResponse.data.id) ? allResponse.data : [subjectResponse.data, ...allResponse.data]);
     }).catch(reason => {
       if (controller.signal.aborted) return;
