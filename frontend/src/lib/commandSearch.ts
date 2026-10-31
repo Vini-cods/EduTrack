@@ -1,6 +1,7 @@
 import type { MaterialWithSubject, Subject, TaskWithSubject } from '../types';
 import type { Note } from '../types/notes';
 import type { NoteSearchItem } from '../api/notes';
+import { noteExcerpt } from './notes.ts';
 
 export type SearchKind = 'subject' | 'task' | 'note' | 'material';
 
@@ -54,8 +55,7 @@ export function matchesCommandQuery(text: string, query: string): boolean {
 }
 
 function excerpt(value: string, limit = 110): string {
-  const text = value.replace(/\s+/g, ' ').trim();
-  return text.length > limit ? text.slice(0, limit).trimEnd() + '…' : text;
+  return noteExcerpt(value, limit);
 }
 
 /** Normalize content only when the API snapshot changes, rather than on each keystroke. */

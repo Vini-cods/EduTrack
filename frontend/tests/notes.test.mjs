@@ -23,3 +23,21 @@ test('excerpt collapses line breaks without interpreting markup', () => {
   assert.equal(noteExcerpt('<script>texto</script>'), '<script>texto</script>');
   assert.equal(noteExcerpt('Um conteúdo extenso', 10), 'Um conteúd…');
 });
+
+test('excerpt accepts supplementary Unicode characters at the exact limit', () => {
+  const listExcerpt = 'a'.repeat(99) + '😀';
+  assert.equal(noteExcerpt(listExcerpt, 100), listExcerpt);
+  assert.equal(noteExcerpt('😀'.repeat(140)), '😀'.repeat(140));
+});
+
+test('excerpt truncates after a complete Unicode code point', () => {
+  assert.equal(noteExcerpt('a'.repeat(99) + '😀b', 100), 'a'.repeat(99) + '😀…');
+  assert.equal(noteExcerpt('😀'.repeat(101), 100), '😀'.repeat(100) + '…');
+});
+
+test('Unicode excerpt retains whitespace normalization and ellipsis boundaries', () => {
+  assert.equal(noteExcerpt('  \n😀\ttexto  extra\r\n ', 7), '😀 texto…');
+  assert.equal(noteExcerpt('😀 texto', 2), '😀…');
+  assert.equal(noteExcerpt('😀 texto', 0), '…');
+  assert.equal(noteExcerpt('  \n\t ', 0), '');
+});

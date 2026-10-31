@@ -92,3 +92,25 @@ test('excerpts collapse whitespace, preserve plain text and bound visible conten
   assert.match(result.description, /^<script>texto<\/script> detalhe/);
   assert.ok(result.description.endsWith('…'));
 });
+
+test('Unicode command excerpts retain a complete code point at the exact limit', () => {
+  const content = 'a'.repeat(109) + '😀';
+  const index = buildCommandSearchIndex({
+    subjects: [{ ...subject, description: content }],
+    tasks: [{ ...task, description: content }],
+    notes: [{ ...note, content, tags: [] }],
+    materials: [{ ...material, description: content }],
+  });
+  const remoteNotes = noteSearchResults([{ id: 45, title: 'Unicode', excerpt: content, tags: [], subject_name: null }]);
+  const remoteMaterials = materialSearchResults([{ ...material, description: content }]);
+  assert.deepEqual([...index, ...remoteNotes, ...remoteMaterials].map(item => item.description), Array(6).fill(content));
+});
+
+test('Unicode command excerpts truncate after a complete code point', () => {
+  const content = 'b'.repeat(109) + '😀restante';
+  const expected = 'b'.repeat(109) + '😀…';
+  const remoteNotes = noteSearchResults([{ id: 45, title: 'Unicode', excerpt: content, tags: [], subject_name: null }]);
+  const remoteMaterials = materialSearchResults([{ ...material, description: content }]);
+  assert.equal(remoteNotes[0].description, expected);
+  assert.equal(remoteMaterials[0].description, expected);
+});
