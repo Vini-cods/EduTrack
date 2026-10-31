@@ -248,13 +248,23 @@ def update_event(db: Session, event_id: int, update: CalendarEventUpdate, user_i
     if new_task_id is not None or "subject_id" in update_data:
         update_data["subject_id"] = resolved_subject_id
 
-    validate_interval(
-        update_data.get("start_datetime", db_event.start_datetime),
-        update_data.get("end_datetime", db_event.end_datetime),
-    )
+    # Um par explicitamente enviado continua sujeito à validação de fuso;
+    # o outro extremo recuperado do SQLite já não possui esse offset.
+    if "start_datetime" in update_data and "end_datetime" in update_data:
+        validate_interval(update_data["start_datetime"], update_data["end_datetime"])
+    # A agenda usa hora civil. Preserve o relógio informado, sem convertê-lo
+    # para UTC, antes de comparar uma atualização parcial ao valor persistido.
+    start = update_data.get("start_datetime", db_event.start_datetime).replace(tzinfo=None)
+    end = update_data.get("end_datetime", db_event.end_datetime)
+    end = end.replace(tzinfo=None) if end is not None else None
+    validate_interval(start, end)
+    if "start_datetime" in update_data:
+        update_data["start_datetime"] = start
+    if "end_datetime" in update_data:
+        update_data["end_datetime"] = end
     _validate_class_duplicates(
         db, user_id, resolved_subject_id, update_data.get("category", db_event.category),
-        [(update_data.get("start_datetime", db_event.start_datetime), update_data.get("end_datetime", db_event.end_datetime))],
+        [(start, end)],
         exclude_id=db_event.id,
     )
 
