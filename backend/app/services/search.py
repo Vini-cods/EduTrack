@@ -22,7 +22,7 @@ def search_tokens(query: str | None) -> list[str]:
     return [token.lstrip("#") for token in normalize_search(query).split() if token.lstrip("#")]
 
 
-def _sqlite_fold(value: str | None) -> str:
+def _sqlite_fold_tags(value: str | None) -> str:
     # JSON is escaped by SQLAlchemy's SQLite serializer. Decode tags before
     # folding so searching "revisao" also finds the stored tag "revisão".
     if value and value.startswith("["):
@@ -40,10 +40,12 @@ def search_fields(db: Session, *fields, tags=None):
     columns = list(fields)
     if dialect == "sqlite":
         connection = db.connection().connection.driver_connection
-        connection.create_function("edutrack_search_fold", 1, _sqlite_fold, deterministic=True)
+        connection.create_function("edutrack_search_fold", 1, normalize_search, deterministic=True)
+        folded = [func.edutrack_search_fold(column) for column in columns]
         if tags is not None:
-            columns.append(cast(tags, String))
-        return [func.edutrack_search_fold(column) for column in columns]
+            connection.create_function("edutrack_search_fold_tags", 1, _sqlite_fold_tags, deterministic=True)
+            folded.append(func.edutrack_search_fold_tags(cast(tags, String)))
+        return folded
     if tags is not None:
         # Note tags are explicitly capped at ten. JSON_VALUE decodes each tag.
         columns.extend(func.json_value(tags, f"$[{index}]") for index in range(10))
