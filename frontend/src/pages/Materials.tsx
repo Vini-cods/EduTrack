@@ -461,9 +461,12 @@ const MaterialModal: React.FC<{
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Disciplina</label>
+              <label htmlFor="material-subject" className="block text-sm font-medium text-graphite mb-1.5">Disciplina</label>
               <select
-                {...register('subject_id', { required: true })}
+                id="material-subject"
+                {...register('subject_id', { required: 'Selecione uma disciplina.' })}
+                aria-invalid={errors.subject_id ? true : undefined}
+                aria-describedby={errors.subject_id ? 'material-subject-error' : undefined}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
               >
                 <option value="" disabled>
@@ -475,10 +478,12 @@ const MaterialModal: React.FC<{
                   </option>
                 ))}
               </select>
+              {errors.subject_id && <p id="material-subject-error" role="alert" className="mt-1.5 text-sm text-danger">{errors.subject_id.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Tipo</label>
+              <label htmlFor="material-category" className="block text-sm font-medium text-graphite mb-1.5">Tipo</label>
               <select
+                id="material-category"
                 {...register('category')}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
               >
@@ -491,8 +496,9 @@ const MaterialModal: React.FC<{
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Link (opcional)</label>
+            <label htmlFor="material-url" className="block text-sm font-medium text-graphite mb-1.5">Link (opcional)</label>
             <input
+              id="material-url"
               {...register('url')}
               type="url"
               placeholder="https://..."
@@ -500,8 +506,9 @@ const MaterialModal: React.FC<{
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Notas (opcional)</label>
+            <label htmlFor="material-description" className="block text-sm font-medium text-graphite mb-1.5">Notas (opcional)</label>
             <textarea
+              id="material-description"
               {...register('description')}
               rows={3}
               placeholder="Contexto, resumo ou anotações sobre este material"
