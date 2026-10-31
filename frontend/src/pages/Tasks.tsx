@@ -51,8 +51,7 @@ export const Tasks: React.FC = () => {
       next.delete('new');
       setSearchParams(next, { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   // Rola até a tarefa vinda de notificações/Command Palette (?highlight=ID) e
   // remove o destaque/param depois de alguns segundos. Reseta os filtros para
