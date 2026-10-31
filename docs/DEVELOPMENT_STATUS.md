@@ -1,8 +1,10 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 30/10/2026.
+Atualizado em 31/10/2026.
 
 ## Entrega atual
+
+- Correção de notificações em 31/10: falhas na consulta de tarefas deixam de exibir o falso sucesso “Tudo em dia”. O painel distingue carregamento, erro com nova tentativa e ausência confirmada de pendências; atualiza ao abrir e cancela requisições anteriores/ao fechar, com timeout de 15 segundos. O indicador não usa dados durante carregamento/erro. A validação em SQLite e conta fictícios reproduziu o falso vazio da main com GET 503; após o ajuste, confirmou loading → alerta → retry → dois prazos. Concluir os dois no Dashboard e reabrir o painel, sem navegar, removeu os avisos. Escape devolveu foco à campainha; fechar/reabrir durante consulta terminou com o snapshot atual. O QA encontrou o painel cortado em 320 px, corrigido com margens móveis e altura limitada; conferidos 320/390/1280 px e temas claro/escuro, com capturas. Passaram os 132 testes frontend existentes (15,75 s) e o build TypeScript/Vite final (2.685 módulos; Vite 3,97 s). Revisão independente automatizada sem bloqueios; proteção contra respostas antigas também revisada em código, sem simular todas as ordens adversas de rede. A lista atualiza ao abrir/mudar rota, sem atualização em tempo real; nenhuma API, dependência ou dado real foi alterado. Implementação e revisão receberam assistência automatizada do Codex.
 
 - Correção de movimentação de tarefas em 30/10: ao mudar uma tarefa de disciplina, uma aula vinculada pode colidir com o índice único da disciplina de destino. A API retorna 409 com orientação para revisar a agenda e faz rollback, em vez de 500. A regressão reproduziu o 500 anterior e confirmou preservação da tarefa, aulas, nota, avaliação e outra conta; após remover o conflito, a nova tentativa funciona. Passaram 81/81 testes dos módulos de tarefas, calendário, índice de aulas, notas e registros acadêmicos, em SQLite isolado. O classificador existente da constraint foi reutilizado; violações de outras constraints não são convertidas em conflito de aula. Revisão independente automatizada sem bloqueios. Sem alteração de model, migration ou dados reais. Implementação e revisão receberam assistência automatizada do Codex.
 

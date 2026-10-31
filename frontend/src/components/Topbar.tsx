@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Menu, Search, Bell, ChevronRight, Plus, ChevronDown, AlertTriangle, CalendarClock } from 'lucide-react';
 import apiClient from '../api/client';
@@ -7,6 +7,7 @@ import { useBreadcrumbValue } from '../contexts/BreadcrumbContext';
 import { isDueToday, isPastDue } from '../lib/date';
 import type { TaskWithSubject } from '../types';
 import { ThemeToggle } from './ThemeToggle';
+import { Button } from './ui/Button';
 
 const routeLabels: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -36,19 +37,41 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
   const [notifOpen, setNotifOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [tasks, setTasks] = useState<TaskWithSubject[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notificationsError, setNotificationsError] = useState(false);
+  const notificationsRequest = useRef<AbortController | null>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const newRef = useRef<HTMLDivElement>(null);
 
+  const loadNotifications = useCallback(() => {
+    notificationsRequest.current?.abort();
+    const request = new AbortController();
+    notificationsRequest.current = request;
+    setNotificationsLoading(true);
+    setNotificationsError(false);
+    apiClient.get<TaskWithSubject[]>('/tasks/', { signal: request.signal, timeout: 15_000 })
+      .then((response) => { if (!request.signal.aborted) setTasks(response.data); })
+      .catch(() => { if (!request.signal.aborted) setNotificationsError(true); })
+      .finally(() => { if (!request.signal.aborted) setNotificationsLoading(false); });
+  }, []);
+
+  const closeNotifications = useCallback(() => {
+    setNotifOpen(false);
+    notificationsRequest.current?.abort();
+    setNotificationsLoading(false);
+  }, []);
+
   useEffect(() => {
-    apiClient.get('/tasks/').then((res) => setTasks(res.data)).catch(() => {});
-  }, [location.pathname]);
+    loadNotifications();
+    return () => notificationsRequest.current?.abort();
+  }, [location.pathname, loadNotifications]);
 
   // Fecha os menus ao clicar fora.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
+      if (notifOpen && notifRef.current && !notifRef.current.contains(e.target as Node)) closeNotifications();
       if (newRef.current && !newRef.current.contains(e.target as Node)) setNewOpen(false);
     };
     document.addEventListener('mousedown', onClick);
@@ -57,11 +80,12 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
       if (profileOpen) profileRef.current?.querySelector('button')?.focus();
       if (notifOpen) notifRef.current?.querySelector('button')?.focus();
       if (newOpen) newRef.current?.querySelector('button')?.focus();
-      setProfileOpen(false); setNotifOpen(false); setNewOpen(false);
+      setProfileOpen(false); setNewOpen(false);
+      if (notifOpen) closeNotifications();
     };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
-  }, [profileOpen, notifOpen, newOpen]);
+  }, [profileOpen, notifOpen, newOpen, closeNotifications]);
 
   const segment = location.pathname.split('/').filter(Boolean)[0] || 'dashboard';
   const baseLabel = routeLabels[segment] || 'EduTrack';
@@ -149,20 +173,30 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
         {/* Notificações reais (derivadas de tarefas atrasadas/de hoje) */}
         <div className="relative" ref={notifRef}>
           <button
-            onClick={() => setNotifOpen((v) => !v)}
+            onClick={() => {
+              if (notifOpen) closeNotifications();
+              else { setNotifOpen(true); loadNotifications(); }
+            }}
             className="relative w-9 h-9 flex items-center justify-center rounded-lg text-graphite hover:bg-surface-muted cursor-pointer"
             aria-label="Notificações"
             aria-expanded={notifOpen}
           >
             <Bell size={18} />
-            {notifCount > 0 && (
+            {!notificationsLoading && !notificationsError && notifCount > 0 && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-crimson" />
             )}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-surface border border-border rounded-lg shadow-float py-2 z-40 animate-scale-in max-h-96 overflow-y-auto">
+            <div aria-busy={notificationsLoading} className="fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80 bg-surface border border-border rounded-lg shadow-float py-2 z-40 animate-scale-in max-h-[min(24rem,calc(100dvh-5rem))] overflow-y-auto">
               <p className="px-4 py-1.5 text-xs text-muted">Notificações</p>
-              {notifCount === 0 ? (
+              {notificationsLoading ? (
+                <p role="status" className="px-4 py-6 text-sm text-muted text-center">Carregando notificações…</p>
+              ) : notificationsError ? (
+                <div className="px-4 py-4 space-y-3">
+                  <p role="alert" className="text-sm text-danger">Não foi possível carregar as notificações.</p>
+                  <Button type="button" variant="outline" onClick={loadNotifications}>Tentar novamente</Button>
+                </div>
+              ) : notifCount === 0 ? (
                 <p className="px-4 py-6 text-sm text-muted text-center">Tudo em dia por aqui.</p>
               ) : (
                 <>
@@ -170,7 +204,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
                     <Link
                       key={t.id}
                       to={`/tasks?highlight=${t.id}`}
-                      onClick={() => setNotifOpen(false)}
+                      onClick={closeNotifications}
                       className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-surface-muted transition-colors"
                     >
                       <AlertTriangle size={15} className="text-danger mt-0.5 shrink-0" />
@@ -184,7 +218,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
                     <Link
                       key={t.id}
                       to={`/tasks?highlight=${t.id}`}
-                      onClick={() => setNotifOpen(false)}
+                      onClick={closeNotifications}
                       className="flex items-start gap-2.5 px-4 py-2.5 hover:bg-surface-muted transition-colors"
                     >
                       <CalendarClock size={15} className="text-warning mt-0.5 shrink-0" />
