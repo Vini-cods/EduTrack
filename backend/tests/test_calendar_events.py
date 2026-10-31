@@ -1,5 +1,7 @@
 """Testes de eventos de calendário: evento único, recorrência, vínculo com task, ownership."""
 
+import pytest
+
 from tests.conftest import make_auth_headers
 
 
@@ -335,3 +337,93 @@ def test_calendar_range_is_half_open_at_midnight_and_preserves_point_events(clie
     empty = client.get("/api/v1/calendar-events/", headers=headers,
                        params={"start": "2026-10-12T23:30:00", "end": "2026-10-12T23:30:00"})
     assert empty.json() == []
+
+
+@pytest.mark.parametrize("offset", ["-03:00", "+05:30", "Z"])
+@pytest.mark.parametrize("field, time, expected_start, expected_end", [
+    ("start_datetime", "10:30:00", "10:30:00", "11:00:00"),
+    ("end_datetime", "11:30:00", "10:00:00", "11:30:00"),
+])
+def test_partial_offset_update_preserves_civil_time(client, academic_data, offset, field, time, expected_start, expected_end):
+    owner, other = academic_data["owner"], academic_data["other"]
+    created = client.post("/api/v1/calendar-events/", headers=owner["headers"],
+                          json={"title": "Horário local", "start_datetime": f"2026-10-31T10:00:00{offset}",
+                                "end_datetime": f"2026-10-31T11:00:00{offset}"})
+    assert created.status_code == 201
+    event = created.json()["events"][0]
+    url = f"/api/v1/calendar-events/{event['id']}"
+    payload = {field: f"2026-10-31T{time}{offset}"}
+    assert client.put(url, headers=other["headers"], json=payload).status_code == 404
+    updated = client.put(url, headers=owner["headers"], json=payload)
+    assert updated.status_code == 200
+    assert updated.json()["start_datetime"] == f"2026-10-31T{expected_start}"
+    assert updated.json()["end_datetime"] == f"2026-10-31T{expected_end}"
+    assert client.get("/api/v1/calendar-events/", headers=other["headers"]).json() == []
+    saved = client.get("/api/v1/calendar-events/", headers=owner["headers"]).json()[0]
+    assert saved["start_datetime"] == updated.json()["start_datetime"]
+    assert saved["end_datetime"] == updated.json()["end_datetime"]
+
+
+@pytest.mark.parametrize("invalid", [
+    {"start_datetime": "2026-10-31T12:00:00-03:00"},
+    {"end_datetime": "2026-10-31T09:00:00+05:30"},
+    {"start_datetime": "2026-10-31T10:00:00", "end_datetime": "2026-10-31T11:00:00Z"},
+    {"start_datetime": "2026-10-31T10:00:00Z", "end_datetime": "2026-10-31T11:00:00"},
+    {"start_datetime": "2026-10-31T11:00:00-03:00", "end_datetime": "2026-10-31T10:00:00-03:00"},
+    {"start_datetime": "2026-10-31T10:00:00-03:00", "end_datetime": "2026-10-31T09:00:00-05:00"},
+    {"start_datetime": "2026-10-31T10:00:00-03:00", "end_datetime": "2026-10-31T11:00:00+03:00"},
+])
+def test_offset_update_rejects_invalid_intervals_without_mutation(client, academic_data, invalid):
+    headers = academic_data["owner"]["headers"]
+    event = client.post("/api/v1/calendar-events/", headers=headers,
+                        json={"title": "Preservar", "start_datetime": "2026-10-31T10:00:00-03:00",
+                              "end_datetime": "2026-10-31T11:00:00-03:00"}).json()["events"][0]
+    response = client.put(f"/api/v1/calendar-events/{event['id']}", headers=headers,
+                          json={"title": "Não deve ser salvo", **invalid})
+    assert response.status_code == 422
+    saved = client.get("/api/v1/calendar-events/", headers=headers).json()[0]
+    assert all(saved[field] == value for field, value in event.items())
+
+
+def test_offset_update_preserves_point_events_clearing_end_and_omitted_fields(client, academic_data):
+    headers = academic_data["owner"]["headers"]
+    event = client.post("/api/v1/calendar-events/", headers=headers,
+                        json={"title": "Instante", "start_datetime": "2026-10-31T10:00:00-03:00"}).json()["events"][0]
+    url = f"/api/v1/calendar-events/{event['id']}"
+    changed = client.put(url, headers=headers, json={"start_datetime": "2026-10-31T10:30:00Z"})
+    assert changed.status_code == 200
+    assert changed.json()["start_datetime"] == "2026-10-31T10:30:00"
+    assert changed.json()["end_datetime"] is None
+    completed = client.put(url, headers=headers, json={"end_datetime": "2026-10-31T11:30:00+05:30"})
+    assert completed.status_code == 200
+    assert completed.json()["end_datetime"] == "2026-10-31T11:30:00"
+    cleared = client.put(url, headers=headers, json={"end_datetime": None, "description": "Sem duração presumida"})
+    assert cleared.status_code == 200
+    assert cleared.json()["end_datetime"] is None
+    renamed = client.put(url, headers=headers, json={"title": "Outro título"})
+    assert renamed.status_code == 200
+    assert renamed.json()["start_datetime"] == "2026-10-31T10:30:00"
+    assert renamed.json()["description"] == "Sem duração presumida"
+
+
+@pytest.mark.parametrize("field, source_start, source_end, target_start, target_end, value", [
+    ("start_datetime", "10:00:00", "12:00:00", "11:00:00", "12:00:00", "11:00:00-03:00"),
+    ("end_datetime", "10:00:00", "12:00:00", "10:00:00", "11:00:00", "11:00:00+05:30"),
+])
+def test_partial_offset_update_keeps_class_conflicts_atomic(client, academic_data, field, source_start, source_end, target_start, target_end, value):
+    owner = academic_data["owner"]
+    headers = owner["headers"]
+    common = {"title": "Aula preservada", "category": "aula", "subject_id": owner["subject_id"]}
+    for start, end in [(source_start, source_end), (target_start, target_end)]:
+        assert client.post("/api/v1/calendar-events/", headers=headers,
+                           json={**common, "start_datetime": f"2026-10-31T{start}",
+                                 "end_datetime": f"2026-10-31T{end}"}).status_code == 201
+    events = client.get("/api/v1/calendar-events/", headers=headers).json()
+    source = next(event for event in events if event["start_datetime"] == f"2026-10-31T{source_start}"
+                  and event["end_datetime"] == f"2026-10-31T{source_end}")
+    failed = client.put(f"/api/v1/calendar-events/{source['id']}", headers=headers,
+                        json={field: f"2026-10-31T{value}", "title": "Não salvar"})
+    assert failed.status_code == 409
+    assert client.get("/api/v1/calendar-events/", headers=headers).json() == events
+    assert client.put(f"/api/v1/calendar-events/{source['id']}", headers=headers,
+                      json={"title": "Edição após conflito"}).status_code == 200
