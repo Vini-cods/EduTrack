@@ -181,3 +181,52 @@ def test_cannot_move_task_into_another_users_subject(client, auth_headers, subje
     saved = client.get(f"/api/v1/tasks/{task['id']}", headers=auth_headers).json()
     assert saved["subject_id"] == subject["id"]
     assert saved["title"] == task["title"]
+
+
+def test_moving_task_with_conflicting_class_preserves_all_contexts_and_can_be_retried(client, academic_data):
+    owner, other = academic_data["owner"], academic_data["other"]
+    headers = owner["headers"]
+    task_url = f"/api/v1/tasks/{owner['task_id']}"
+    original_task = client.get(task_url, headers=headers).json()
+    common = {"title": "Aula vinculada", "category": "aula", "task_id": owner["task_id"]}
+    for day in (2, 9):
+        created = client.post("/api/v1/calendar-events/", headers=headers,
+                              json={**common, "start_datetime": f"2026-11-{day:02}T14:00:00",
+                                    "end_datetime": f"2026-11-{day:02}T15:00:00"})
+        assert created.status_code == 201
+    conflict = client.post("/api/v1/calendar-events/", headers=headers,
+                           json={"title": "Aula já cadastrada", "category": "aula",
+                                 "subject_id": owner["alternate_subject_id"],
+                                 "start_datetime": "2026-11-09T14:00:00", "end_datetime": "2026-11-09T15:00:00"}).json()["events"][0]
+    note = client.post("/api/v1/notes/", headers=headers,
+                       json={"title": "Conteúdo preservado", "task_id": owner["task_id"]}).json()
+    assessments_url = f"/api/v1/subjects/{owner['subject_id']}/assessments"
+    assert client.post(assessments_url, headers=headers,
+                       json={"name": "Resultado preservado", "score": 8, "task_id": owner["task_id"]}).status_code == 201
+    assert client.post("/api/v1/calendar-events/", headers=other["headers"],
+                       json={**common, "task_id": other["task_id"], "start_datetime": "2026-11-09T14:00:00",
+                             "end_datetime": "2026-11-09T15:00:00"}).status_code == 201
+    original_events = client.get("/api/v1/calendar-events/", headers=headers).json()
+    other_events = client.get("/api/v1/calendar-events/", headers=other["headers"]).json()
+    original_assessments = client.get(assessments_url, headers=headers).json()
+
+    response = client.put(task_url, headers=headers,
+                          json={"subject_id": owner["alternate_subject_id"], "title": "Não salvar", "status": "concluida"})
+    assert response.status_code == 409
+    assert "mesma data e horário" in response.json()["detail"]
+    assert client.get(task_url, headers=headers).json() == original_task
+    assert client.get("/api/v1/calendar-events/", headers=headers).json() == original_events
+    assert client.get(f"/api/v1/notes/{note['id']}", headers=headers).json() == note
+    assert client.get(assessments_url, headers=headers).json() == original_assessments
+    assert client.get("/api/v1/calendar-events/", headers=other["headers"]).json() == other_events
+
+    assert client.delete(f"/api/v1/calendar-events/{conflict['id']}", headers=headers).status_code == 204
+    retried = client.put(task_url, headers=headers, json={"subject_id": owner["alternate_subject_id"]})
+    assert retried.status_code == 200
+    assert retried.json()["subject_id"] == owner["alternate_subject_id"]
+    assert all(event["subject_id"] == owner["alternate_subject_id"]
+               for event in client.get("/api/v1/calendar-events/", headers=headers).json())
+    assert client.get(f"/api/v1/notes/{note['id']}", headers=headers).json()["subject_id"] == owner["alternate_subject_id"]
+    assessment = client.get(assessments_url, headers=headers).json()["items"][0]
+    assert assessment["task_id"] is None and assessment["score"] == 8
+    assert client.get("/api/v1/calendar-events/", headers=other["headers"]).json() == other_events

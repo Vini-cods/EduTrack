@@ -35,16 +35,20 @@ class DuplicateClassError(ValueError):
         super().__init__("Já existe uma aula dessa disciplina com a mesma data e horário. Revise a grade antes de salvar.")
 
 
+def is_duplicate_class_error(exc: IntegrityError) -> bool:
+    # SQLite identifica a chave pelas colunas; SQL Server/PostgreSQL usam
+    # o nome do índice. Não converta violações de outras constraints em 409.
+    error = str(exc.orig)
+    columns = "calendar_events.user_id, calendar_events.subject_id, calendar_events.start_datetime, calendar_events.end_datetime"
+    return "uq_calendar_classes_subject_interval" in error or f"UNIQUE constraint failed: {columns}" in error
+
+
 def _commit_events(db: Session) -> None:
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        # SQLite identifica a chave pelas colunas; SQL Server/PostgreSQL usam
-        # o nome do índice. Não converta violações de outras constraints em 409.
-        error = str(exc.orig)
-        columns = "calendar_events.user_id, calendar_events.subject_id, calendar_events.start_datetime, calendar_events.end_datetime"
-        if "uq_calendar_classes_subject_interval" in error or f"UNIQUE constraint failed: {columns}" in error:
+        if is_duplicate_class_error(exc):
             raise DuplicateClassError() from exc
         raise
 
