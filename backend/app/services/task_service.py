@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import case, update
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
 from app.models.activity_history import TaskStatusEvent
 from app.models.task import Task
@@ -8,6 +9,7 @@ from app.models.calendar_event import CalendarEvent
 from app.models.note import Note
 from app.models.academic_record import Assessment
 from app.schemas.task import TaskCreate, TaskUpdate, TaskStatusUpdate, TaskWithSubject
+from app.services.calendar_event_service import is_duplicate_class_error
 from typing import List, Optional
 
 
@@ -138,9 +140,18 @@ def update_task(db: Session, task_id: int, task_update: TaskUpdate, user_id: int
             return None
         # A agenda acompanha a intenção atual. Execuções mantêm a disciplina
         # registrada ao iniciar, preservando a atribuição histórica das horas.
-        db.query(CalendarEvent).filter(
-            CalendarEvent.task_id == task_id, CalendarEvent.user_id == user_id
-        ).update({CalendarEvent.subject_id: new_subject_id}, synchronize_session="fetch")
+        try:
+            db.query(CalendarEvent).filter(
+                CalendarEvent.task_id == task_id, CalendarEvent.user_id == user_id
+            ).update({CalendarEvent.subject_id: new_subject_id}, synchronize_session="fetch")
+        except IntegrityError as exc:
+            db.rollback()
+            if is_duplicate_class_error(exc):
+                raise TaskStateConflict(
+                    "Já existe uma aula na disciplina de destino com a mesma data e horário. "
+                    "Revise a agenda antes de mover a tarefa."
+                ) from exc
+            raise
         # Notas da tarefa acompanham sua disciplina atual; as de execução
         # mantêm o contexto histórico da sessão, assim como StudySession.
         db.query(Note).filter(
