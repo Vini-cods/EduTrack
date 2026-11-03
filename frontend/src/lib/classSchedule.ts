@@ -67,7 +67,7 @@ export function buildClassSchedulePayload(draft: ClassScheduleDraft, subjectName
   const error = validateClassSchedule(draft);
   if (error) throw new Error(error);
   return {
-    title: `Aula de ${subjectName}`.slice(0, 255),
+    title: Array.from(`Aula de ${subjectName}`).slice(0, 255).join(''),
     category: 'aula', subject_id: draft.subjectId,
     start_datetime: `${draft.startDate}T${draft.startTime}:00`,
     end_datetime: `${draft.startDate}T${draft.endTime}:00`,
