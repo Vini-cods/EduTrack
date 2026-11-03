@@ -1,6 +1,9 @@
 """Testes de tarefas (Task): CRUD, priority/estimated_hours, status e isolamento."""
 
-from tests.conftest import make_auth_headers
+import pytest
+
+from app.models import Task, TaskStatusEvent
+from tests.conftest import TestingSessionLocal, make_auth_headers
 
 
 def test_create_task_minimal(client, auth_headers, subject):
@@ -145,6 +148,73 @@ def test_task_partial_update_rejects_null_required_fields_and_keeps_data(client,
     )
     assert cleared.status_code == 200
     assert cleared.json()["estimated_hours"] is None
+
+
+@pytest.mark.parametrize("legacy_title", ["", "   ", "x" * 256, "  Título legado  "],
+                         ids=["empty", "whitespace", "overlong", "padded"])
+def test_legacy_task_titles_remain_readable_without_rewriting_or_exposing_other_users(client, academic_data, legacy_title):
+    owner, other = academic_data["owner"], academic_data["other"]
+    with TestingSessionLocal() as db:
+        db.get(Task, owner["task_id"]).title = legacy_title
+        db.commit()
+
+    url = f"/api/v1/tasks/{owner['task_id']}"
+    detail = client.get(url, headers=owner["headers"])
+    assert detail.status_code == 200
+    assert detail.json()["title"] == legacy_title
+    for path in ("/api/v1/tasks/", f"/api/v1/tasks/subject/{owner['subject_id']}"):
+        response = client.get(path, headers=owner["headers"])
+        assert response.status_code == 200
+        assert next(item for item in response.json() if item["id"] == owner["task_id"])["title"] == legacy_title
+
+    assert client.get(url, headers=other["headers"]).status_code == 404
+    other_items = client.get("/api/v1/tasks/", headers=other["headers"]).json()
+    assert owner["task_id"] not in [item["id"] for item in other_items]
+    assert client.get(f"/api/v1/tasks/subject/{owner['subject_id']}", headers=other["headers"]).json() == []
+    with TestingSessionLocal() as db:
+        assert db.get(Task, owner["task_id"]).title == legacy_title
+
+
+@pytest.mark.parametrize("legacy_title", ["", "   ", "x" * 256, "  Título legado  "],
+                         ids=["empty", "whitespace", "overlong", "padded"])
+def test_legacy_task_status_returns_success_and_records_transition_only_once(client, academic_data, legacy_title):
+    owner, other = academic_data["owner"], academic_data["other"]
+    with TestingSessionLocal() as db:
+        db.get(Task, owner["task_id"]).title = legacy_title
+        db.commit()
+
+    url = f"/api/v1/tasks/{owner['task_id']}/status"
+    assert client.patch(url, headers=other["headers"], json={"status": "concluida"}).status_code == 404
+    response = client.patch(url, headers=owner["headers"], json={"status": "concluida"})
+    assert response.status_code == 200
+    assert response.json()["title"] == legacy_title
+    assert response.json()["status"] == "concluida"
+    assert response.json()["completed_at"] is not None
+    repeated = client.patch(url, headers=owner["headers"], json={"status": "concluida"})
+    assert repeated.status_code == 200
+    assert repeated.json() == response.json()
+
+    with TestingSessionLocal() as db:
+        saved = db.get(Task, owner["task_id"])
+        assert saved.title == legacy_title and saved.status == "concluida"
+        events = db.query(TaskStatusEvent).filter(TaskStatusEvent.task_id == owner["task_id"]).all()
+        assert [(event.from_status, event.to_status) for event in events] == [("pendente", "concluida")]
+        assert db.get(Task, other["task_id"]).status == "pendente"
+
+
+def test_legacy_task_can_be_repaired_without_relaxing_title_write_validation(client, academic_data):
+    owner = academic_data["owner"]
+    with TestingSessionLocal() as db:
+        db.get(Task, owner["task_id"]).title = ""
+        db.commit()
+    url = f"/api/v1/tasks/{owner['task_id']}"
+    for invalid_title in ("", "   ", "x" * 256):
+        assert client.post("/api/v1/tasks/", headers=owner["headers"],
+                           json={"subject_id": owner["subject_id"], "title": invalid_title}).status_code == 422
+        assert client.put(url, headers=owner["headers"], json={"title": invalid_title}).status_code == 422
+    repaired = client.put(url, headers=owner["headers"], json={"title": "  Revisar grafos  "})
+    assert repaired.status_code == 200
+    assert repaired.json()["title"] == "Revisar grafos"
 
 
 def test_moving_task_updates_planning_but_preserves_execution_context(client, auth_headers, subject):

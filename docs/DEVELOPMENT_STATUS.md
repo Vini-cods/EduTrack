@@ -1,8 +1,10 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 31/10/2026.
+Atualizado em 03/11/2026.
 
 ## Entrega atual
+
+- Compatibilidade de tarefas em 03/11: a resposta preserva os títulos legados exatamente como estão no banco, inclusive vazios, com espaços e acima de 255 caracteres, sem reaplicar as regras atuais de escrita. Antes, esses registros podiam causar 500 nas consultas e após uma alteração de status já persistida; títulos com espaços também eram aparados somente na resposta. Criação e edição continuam validando e normalizando o título, permitindo corrigir o registro explicitamente. O histórico anterior à validação aceitava esses valores; nenhum registro real foi consultado ou alterado para esta correção. Oito das nove regressões novas falharam antes do ajuste; depois passaram 35/35 testes de tarefas e histórico (`python -m pytest -q tests/test_tasks.py tests/test_activity_history.py`, SQLite em memória), incluindo conteúdo preservado, status idempotente, um único evento de conclusão, reparação e isolamento entre duas contas. Sem mudanças de interface, model, migration, dependências ou banco real; não houve novo QA visual nem repetição da suíte backend completa, pois a alteração é restrita ao contrato de resposta do título.
 
 - Correção dos blocos de estudo em 31/10: criação, soma semanal, recorte e conflitos usam aritmética civil, evitando duração zero ou duplicada nas transições de horário de verão. Eventos com offset/Z seguem a hora local exibida; sessões de execução mantêm instantes UTC. Datas reais, anos 1–9999 e duração inteira são validados; início/fim inexistentes no fuso local geram orientação no modal antes do envio. Doze regressões novas usam TZ isolado, com nove falhas no baseline de 23 testes. Passaram 37/37 focados e uma conferência refinada de cada fronteira semanal: antes [0,3600], agora [1800,1800]. A rodada final aprovou 144/144 testes frontend em execução serial e o build TypeScript/Vite (2.685 módulos; Vite 43,72 s sob carga do host). Revisão separada sem bloqueios. O navegador não respondeu, portanto o novo erro do modal não recebeu QA visual nesta etapa; o callback e a apresentação do erro foram conferidos em código. Sem dependências, API ou dados reais alterados nesta correção.
 
