@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.models.calendar_event import CalendarEvent
+from tests.conftest import TestingSessionLocal
 from tests.conftest import make_auth_headers
 
 
@@ -337,6 +339,55 @@ def test_calendar_range_is_half_open_at_midnight_and_preserves_point_events(clie
     empty = client.get("/api/v1/calendar-events/", headers=headers,
                        params={"start": "2026-10-12T23:30:00", "end": "2026-10-12T23:30:00"})
     assert empty.json() == []
+
+
+@pytest.mark.parametrize("recurrence", [None, {"type": "daily", "until": "2026-10-14"}])
+def test_create_offset_interval_rejects_inverted_civil_time_before_persistence(client, academic_data, recurrence):
+    owner, other = academic_data["owner"], academic_data["other"]
+    existing = client.post("/api/v1/calendar-events/", headers=other["headers"],
+                           json={"title": "Outro evento", "start_datetime": "2026-10-12T15:00:00"})
+    assert existing.status_code == 201
+    other_before = client.get("/api/v1/calendar-events/", headers=other["headers"]).json()
+    # Em UTC o fim (14h) vem depois do início (13h), mas a agenda preserva
+    # o relógio informado: 09h não pode ser gravado como fim de 10h.
+    invalid = client.post("/api/v1/calendar-events/", headers=owner["headers"],
+                          json={"title": "Intervalo invertido", "start_datetime": "2026-10-12T10:00:00-03:00",
+                                "end_datetime": "2026-10-12T09:00:00-05:00", "recurrence": recurrence})
+    assert invalid.status_code == 422
+    assert client.get("/api/v1/calendar-events/", headers=owner["headers"]).json() == []
+    assert client.get("/api/v1/calendar-events/", headers=other["headers"]).json() == other_before
+    with TestingSessionLocal() as db:
+        assert db.query(CalendarEvent).filter(CalendarEvent.user_id == owner["user_id"]).count() == 0
+
+
+@pytest.mark.parametrize("end, expected_end", [
+    ("2026-10-12T12:00:00-02:00", "12:00:00"),
+    ("2026-10-12T12:00:00-04:00", "12:00:00"),
+    ("2026-10-12T11:00:00-02:00", "11:00:00"),
+    ("2026-10-12T10:00:00-04:00", "10:00:00"),
+    ("2026-10-12T10:00:00-03:00", "10:00:00"),
+])
+def test_recurrence_preserves_civil_duration_with_different_offsets(client, academic_data, end, expected_end):
+    owner, other = academic_data["owner"], academic_data["other"]
+    common = {"title": "Horário da disciplina", "subject_id": owner["subject_id"],
+              "task_id": owner["task_id"], "start_datetime": "2026-10-12T10:00:00-03:00", "end_datetime": end}
+    single = client.post("/api/v1/calendar-events/", headers=owner["headers"], json=common)
+    recurring = client.post("/api/v1/calendar-events/", headers=owner["headers"],
+                            json={**common, "recurrence": {"type": "daily", "until": "2026-10-14"}})
+    assert single.status_code == recurring.status_code == 201
+    events = recurring.json()["events"]
+    assert len(events) == 3
+    for event, day in zip(events, ("12", "13", "14")):
+        assert event["start_datetime"] == f"2026-10-{day}T10:00:00"
+        assert event["end_datetime"] == f"2026-10-{day}T{expected_end}"
+        assert event["subject_id"] == owner["subject_id"]
+        assert event["task_id"] == owner["task_id"]
+        assert event["recurrence_group_id"] == recurring.json()["recurrence_group_id"]
+    assert events[0]["end_datetime"] == single.json()["events"][0]["end_datetime"]
+    listed = client.get("/api/v1/calendar-events/", headers=owner["headers"]).json()
+    assert len(listed) == 4
+    assert all(event["end_datetime"].endswith(expected_end) for event in listed)
+    assert client.get("/api/v1/calendar-events/", headers=other["headers"]).json() == []
 
 
 @pytest.mark.parametrize("offset", ["-03:00", "+05:30", "Z"])
