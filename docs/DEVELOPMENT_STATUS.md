@@ -1,8 +1,10 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 03/11/2026.
+Atualizado em 04/11/2026.
 
 ## Entrega atual
+
+- Correção da criação de eventos em 04/11: o serviço valida e usa a representação civil antes de gravar ou expandir recorrências, alinhando a criação à edição existente. Pares com offsets diferentes podiam passar na comparação UTC e gravar um fim civil anterior ao início, retornando 500 após o commit, ou alterar a duração da série. Agora o intervalo civil invertido recebe 422 sem gravar, as ocorrências mantêm o relógio informado e um fim explícito de duração zero permanece preenchido. As sete regressões novas falharam no baseline; depois passaram 58/58 testes de eventos, índice de aulas e grade (`python -m pytest -q tests/test_calendar_events.py tests/test_class_index.py tests/test_subject_schedule.py`), incluindo persistência, vínculos e isolamento entre duas contas. Revisão independente sem bloqueios; diff conferido. Validação em SQLite em memória, sem mudanças de schema, model, migration, dependências ou dados reais. O schema conserva as regras anteriores de awareness e ordem UTC dos pares explícitos; não houve novo QA visual ou repetição da suíte backend completa.
 
 - Correção de títulos da grade em 03/11: o título gerado a partir do nome da disciplina limita 255 pontos de código, em vez de cortar unidades UTF-16 e separar emojis. Uma disciplina válida com 246 letras e um emoji produzia um surrogate isolado no título da aula. Duas regressões novas falharam antes; depois passaram 21/21 testes de grade, projeção e layout de calendário (`node --experimental-strip-types --test --test-concurrency=1 tests/classSchedule.test.mjs tests/calendarProjection.test.mjs tests/calendarTimeGrid.test.mjs`). O build TypeScript/Vite passou com 2.685 módulos. Uma conferência HTTP adicional usou o gerador real do frontend e a API em processo com SQLite em memória: o payload antigo recebeu 500 sem gravar aulas; o corrigido recebeu 201 e criou quatro ocorrências com o título de 255 pontos de código preservado. Revisão independente sem bloqueios. Sem alteração de layout, interação, API, model, migration, dependências ou dados reais; não foi realizado novo QA visual. O limite continua contando pontos de código, sem prometer preservação de grafemas compostos.
 
