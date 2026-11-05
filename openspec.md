@@ -3,7 +3,7 @@
 > **Leia antes de planejar ou alterar o projeto.**
 > O EduTrack é um produto de organização acadêmica. Cada mudança deve resolver um problema real do estudante, preservar os dados existentes e produzir um resultado verificável.
 
-- **Atualizado em:** 27/10/2026.
+- **Atualizado em:** 05/11/2026.
 - **Finalidade:** orientar pessoas e agentes na especificação, implementação, validação e evolução do produto.
 - **Base:** implementação existente no repositório. Ideias futuras estão identificadas como **PROPOSTAS**.
 
@@ -43,6 +43,8 @@ Use os manifests e lockfiles para conferir versões. SQL Server é um caminho co
 | [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md) | Implementação atual, verificações realizadas, limites e prioridades. |
 | [docs/HISTORY.md](docs/HISTORY.md) | Evolução por commit, inventário e rastreabilidade do corte histórico documentado. |
 | [docs/PASSWORD_RECOVERY.md](docs/PASSWORD_RECOVERY.md) | Recuperação de senha, worker, produção e recuperação operacional. |
+| [docs/AI_ASSISTANT.md](docs/AI_ASSISTANT.md) | Morgana: configuração OpenAI, contexto, privacidade, controles e limites operacionais. |
+| [Contrato da assistente](openspec/specs/academic-assistant/spec.md) | Requisitos da IA consultiva, pet livre e comentários locais. |
 | [Procedência da marca](frontend/src/assets/brand/README.md) | Origem e formato das variantes de logo e vídeo. |
 | Código, migrations e testes | Contratos executáveis e comportamento efetivamente implementado. |
 

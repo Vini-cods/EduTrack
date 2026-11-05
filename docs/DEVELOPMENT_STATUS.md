@@ -189,11 +189,12 @@ A fixture de testes usa bcrypt real com custo de 4 rounds apenas dentro do proce
 
 Prioridades confirmadas pelo código:
 
-1. Concluir QA visual das funcionalidades novas quando o navegador estiver disponível. Serviços, login e leituras autenticadas já foram conferidos por HTTP; migração e preservação dos dados também foram verificadas.
-2. Escolher host, domínio e provedor/remetente SMTP, preencher as configurações e homologar HTTPS, worker, entrega externa e monitoramento. A preparação foi autorizada sem publicação; nada foi publicado.
-3. Configurar backups agendados, retenção e armazenamento externo; ensaiar recuperação no host escolhido e ampliar QA de concorrência/acessibilidade. A homologação de banco continua concentrada em SQLite.
-4. Avaliar atualização em tempo real de preferências e ampliar consultas/indexação full-text se o volume justificar. Paginação de Notes/Materials e sincronização por conta já estão implementadas.
-5. Evoluir regras de avaliações por instituição sem apresentar a média parcial como resultado oficial; decidir uploads somente se houver necessidade de produto.
+1. Configurar a chave OpenAI local e homologar uma conversa real da Morgana com e sem contexto, acesso ao modelo, consumo e limites do provedor. A integração foi validada com transporte simulado; não há credencial disponível nesta entrega.
+2. Ampliar o QA visual de alta densidade e condições adversas nas áreas acadêmicas, acessibilidade e concorrência. A Morgana e os fluxos explicitamente listados nas rodadas acima já foram conferidos no navegador; isso não substitui uma auditoria completa de todos os módulos.
+3. Escolher host, domínio e provedor/remetente SMTP, preencher as configurações e homologar HTTPS, worker, entrega externa e monitoramento. A preparação foi autorizada sem publicação; nada foi publicado.
+4. Configurar backups agendados, retenção e armazenamento externo; ensaiar recuperação no host escolhido e ampliar QA de concorrência/acessibilidade. A homologação de banco continua concentrada em SQLite.
+5. Avaliar atualização em tempo real de preferências e ampliar consultas/indexação full-text se o volume justificar. Paginação de Notes/Materials e sincronização por conta já estão implementadas.
+6. Evoluir regras de avaliações por instituição sem apresentar a média parcial como resultado oficial; decidir uploads somente se houver necessidade de produto.
 
 Materials, Notes, Academic Load, analytics e Settings estão implementados. Histórico prospectivo, preferências por conta, busca paginada e outbox/retry/rate limit compartilhado também fazem parte do código atual; dados legados desconhecidos, atualização em tempo real, índice full-text e infraestrutura externa permanecem com os limites descritos acima.
 

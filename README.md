@@ -19,6 +19,7 @@ O [OpenSpec — guia de desenvolvimento](openspec.md) define regras de produto e
 | Academic Load e Insights | Comparação de intervalos equivalentes, calendário de consistência, padrões de sessões por dia/hora, média/mediana, cobertura do planejamento, sobrecarga, distribuição por disciplina e exportação CSV. |
 | Navegação e aparência | Command Palette (`Ctrl+K`/`Cmd+K`) com busca; o tema claro/escuro/sistema escolhido no acesso continua no vídeo e no Dashboard e sincroniza com a conta; capacidade/Pomodoro persistidos por conta; layout responsivo e respeito a `prefers-reduced-motion`. |
 | Acesso | Login e cadastro em etapas; autenticação JWT e recuperação de senha por e-mail quando SMTP estiver configurado. |
+| Morgana | Pet livre com caminhada, dicas locais e chat consultivo com contexto acadêmico opcional via OpenAI; chave somente no backend. |
 
 ## Stack e requisitos
 
@@ -48,6 +49,8 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 O último comando gera uma chave nova. Edite `backend/.env`, substitua o valor de `SECRET_KEY` pela chave gerada e mantenha `DB_ENGINE=sqlite` e `SQLITE_PATH=edutrack.db` para o ambiente local. **Não sobrescreva um `.env` existente** ao atualizar uma instalação. A chave é obrigatória; o backend não usa uma chave fixa de desenvolvimento como fallback.
 
 Sem SMTP, é possível testar todas as demais áreas; a recuperação de senha informa indisponibilidade em vez de simular um envio. A configuração de transporte e os limites desse fluxo estão em [Recuperação de senha](docs/PASSWORD_RECOVERY.md).
+
+Para ativar o chat da Morgana, configure `OPENAI_API_KEY` no `.env` do backend. `OPENAI_MODEL` usa `gpt-4.1-mini` por padrão e `AI_TIMEOUT_SECONDS=30` limita a espera do provedor. Reinicie a API após configurar. Sem chave, o pet e as dicas locais funcionam, e o painel informa que as respostas de IA estão indisponíveis. Consulte [Morgana — assistente acadêmica](docs/AI_ASSISTANT.md) para dados enviados, limites e homologação.
 
 Crie ou atualize o schema e inicie a API, ainda em `backend`:
 
@@ -152,7 +155,7 @@ Ao excluir uma disciplina, suas tarefas, materiais, plano e avaliações são re
 
 ## API e autenticação
 
-O contrato completo de rotas, parâmetros, schemas e respostas é gerado pelo FastAPI no [Swagger local](http://localhost:8000/docs). Os grupos publicados incluem `auth`, `subjects`, `academic-records`, `tasks`, `dashboard`, `calendar-events`, `study-sessions`, `materials`, `notes`, `analytics` e `preferences`. Swagger/OpenAPI públicos ficam desabilitados em produção.
+O contrato completo de rotas, parâmetros, schemas e respostas é gerado pelo FastAPI no [Swagger local](http://localhost:8000/docs). Os grupos publicados incluem `auth`, `subjects`, `academic-records`, `tasks`, `dashboard`, `calendar-events`, `study-sessions`, `materials`, `notes`, `analytics`, `preferences` e `assistant`. Swagger/OpenAPI públicos ficam desabilitados em produção.
 
 `POST /api/v1/auth/login` recebe formulário `application/x-www-form-urlencoded`, com `username` representando o e-mail e `password`; retorna um JWT Bearer. Cadastro, pedido de recuperação e redefinição são públicos. As demais operações acadêmicas exigem autenticação e filtram os dados pelo proprietário. Recurso inexistente ou de outro usuário retorna `404`; token inválido, `401`; conflito de estado, `409`; erro de validação, `422`.
 
@@ -208,6 +211,7 @@ As próximas evoluções incluem homologar a infraestrutura escolhida, aprofunda
 - [README.md](README.md): referência principal de produto, instalação e arquitetura.
 - [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md): estado atual, validações, limitações e prioridades.
 - [docs/PASSWORD_RECOVERY.md](docs/PASSWORD_RECOVERY.md): configuração SMTP e comportamento operacional da recuperação.
+- [docs/AI_ASSISTANT.md](docs/AI_ASSISTANT.md): configuração OpenAI, pet Morgana, contexto enviado, controles e limites da IA.
 - [frontend/src/assets/brand/README.md](frontend/src/assets/brand/README.md): origem, variantes e uso correto da marca.
 - [AGENTS.md](AGENTS.md): fluxo de contribuição, preservação de dados e commits incrementais.
 

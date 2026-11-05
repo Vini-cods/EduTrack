@@ -1,6 +1,6 @@
 # Assistente acadêmica — Morgana
 
-Status: EM IMPLEMENTAÇÃO em 05/11/2026.
+Status: IMPLEMENTADO em 05/11/2026; conexão real OpenAI PENDENTE de chave local.
 
 ## Purpose
 
@@ -44,7 +44,25 @@ O histórico SHALL existir somente na memória da sessão de interface. O backen
 
 ### Requirement: pet acessível e leve
 
-O pet SHALL ser uma ilustração vetorial da Morgana com estados de repouso, processamento, resposta e falha. O painel SHALL oferecer teclado, fechamento por Escape, retorno de foco, tema claro/escuro, tamanho adequado ao mobile e respeito a `prefers-reduced-motion`.
+O pet SHALL ser uma ilustração vetorial da Morgana, fiel à referência de rosto preto, olhos azuis grandes, focinho branco, bandana amarela e braços cruzados, com estados de repouso, caminhada, processamento, resposta e falha. O painel SHALL oferecer teclado, fechamento por Escape, retorno de foco, tema claro/escuro, tamanho adequado ao mobile e respeito a `prefers-reduced-motion`.
+
+#### Scenario: acompanhar a interface sem moldura
+
+- WHEN o chat está fechado;
+- THEN a Morgana aparece solta sobre a interface, sem caixa de lançamento, pode caminhar na faixa inferior útil e ser reposicionada manualmente em toda a área útil;
+- AND o estudante pode pausar, ocultar e restaurar o pet, com alternativa ao arraste por teclado.
+
+Posicionar manualmente acima da faixa inferior mantém o pet nesse lugar, sem retorno automático. Home devolve ao canto. Se a área útil não comportar a personagem e seus controles, ela fica temporariamente suprimida.
+
+#### Scenario: manter o foco
+
+- WHEN há interação com o pet, chat aberto, Focus Mode, aba oculta ou preferência por movimento reduzido;
+- THEN a caminhada automática é interrompida;
+- AND redimensionar a janela mantém a personagem dentro da área útil.
+
+### Requirement: comentários espontâneos controlados
+
+A Morgana SHALL mostrar dicas breves em balões sobre a área aberta, com frequência limitada. Esses comentários locais não são respostas geradas pela OpenAI, não inferem prazos desconhecidos e não disparam chamadas pagas automaticamente.
 
 ### Requirement: falhas previsíveis
 
@@ -59,10 +77,11 @@ O sistema SHALL oferecer feedback de carregamento, cancelamento e nova tentativa
 - Configuração declarada não comprova que uma chave é válida, que há saldo ou que o modelo está autorizado. Homologação real depende da credencial local.
 - Aparência da Morgana desenhada em SVG para esta interface; identidade principal do EduTrack permanece independente.
 
-## Validação prevista
+## Validação realizada e pendências
 
-- API: autenticação, isolamento entre dois usuários, vínculos inconsistentes, limites de entrada/contexto, opt-out, payload OpenAI e erros com transporte simulado.
-- Interface: histórico limitado, caminhos internos seguros, descarte de respostas antigas, type-check, suíte de regras e build.
-- Navegador: pet/painel, estado sem configuração, teclado, temas e viewport mobile. Chamada real somente se houver chave local disponível.
+- API: 24 testes novos e 263/263 na suíte completa, com transporte simulado. Cobertura de autenticação, isolamento entre dois usuários, vínculos inconsistentes, limites, ausência de escritas, opt-out, payload OpenAI, concorrência e erros/timeout.
+- Interface: 124/124 testes, incluindo histórico limitado, caminhos internos seguros, erros e regras de limites/pausas/posicionamento do pet. TypeScript e build Vite aprovados. Descarte de respostas antigas revisado no hook e isolamento por chave de usuário/sessão.
+- Navegador: pet/painel, estado sem configuração, comentário local, arraste, setas/Home, ocultar/restaurar, caminhada automática, Escape/foco, temas e viewport 390×844 conferidos. Sem transbordamento horizontal na área testada.
+- PENDENTE: credencial/saldo/acesso ao modelo e respostas reais OpenAI. Não houve chamada externa paga, migration ou alteração acadêmica para homologar esta entrega. Movimento reduzido/aba oculta são cobertos por regras/revisão, sem alteração da preferência do dispositivo durante o QA.
 
-As evidências efetivamente realizadas serão registradas em `docs/DEVELOPMENT_STATUS.md` e no guia operacional da assistente.
+As evidências e limitações detalhadas estão em [estado de desenvolvimento](../../../docs/DEVELOPMENT_STATUS.md) e no [guia operacional](../../../docs/AI_ASSISTANT.md).
