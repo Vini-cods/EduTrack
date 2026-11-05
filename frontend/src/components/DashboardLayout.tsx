@@ -5,8 +5,11 @@ import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
 import { Drawer } from './ui/Drawer';
 import { BreadcrumbProvider } from '../contexts/BreadcrumbContext';
+import { useAuth } from '../contexts/AuthContext';
+import { MorganaAssistant } from './assistant/MorganaAssistant';
 
 export const DashboardLayout: React.FC = () => {
+  const { user, sessionId } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -46,6 +49,7 @@ export const DashboardLayout: React.FC = () => {
         </div>
 
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        {user && <MorganaAssistant key={`${user.id}:${sessionId}`} />}
       </div>
     </BreadcrumbProvider>
   );

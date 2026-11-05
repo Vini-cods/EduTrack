@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { Menu, Search, Bell, ChevronRight, Plus, ChevronDown, AlertTriangle, CalendarClock } from 'lucide-react';
+import { Menu, Search, Bell, ChevronRight, Plus, ChevronDown, AlertTriangle, CalendarClock, Cat } from 'lucide-react';
 import apiClient from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useBreadcrumbValue } from '../contexts/BreadcrumbContext';
 import { isDueToday, isPastDue } from '../lib/date';
 import type { TaskWithSubject } from '../types';
 import { ThemeToggle } from './ThemeToggle';
+import { MORGANA_RESTORE_EVENT } from '../lib/morganaCompanion';
 
 const routeLabels: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -113,6 +114,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenPalette, onOpenMobileMenu 
       </button>
 
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <button type="button" data-morgana-restore onClick={() => window.dispatchEvent(new Event(MORGANA_RESTORE_EVENT))} aria-label="Chamar Morgana" title="Chamar Morgana" className="w-11 h-11 flex items-center justify-center rounded-lg text-graphite hover:bg-surface-muted cursor-pointer"><Cat size={19} aria-hidden="true" /></button>
         <ThemeToggle />
         {/* Ação rápida: nova disciplina/tarefa */}
         <div className="relative" ref={newRef}>
