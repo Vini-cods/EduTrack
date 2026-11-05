@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     RESET_TOKEN_EXPIRE_MINUTES: int = Field(default=30, ge=1, le=1440)
 
+    # Assistente: segredo somente no servidor, sem dependência obrigatória de IA.
+    OPENAI_API_KEY: str | None = Field(default=None, repr=False)
+    OPENAI_MODEL: str = "gpt-4.1-mini"
+    AI_TIMEOUT_SECONDS: float = Field(default=30, ge=1, le=60)
+
+    @field_validator("OPENAI_API_KEY", "OPENAI_MODEL")
+    @classmethod
+    def trim_assistant_configuration(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
     # Recuperação de senha. O link nunca é montado a partir do Host da requisição.
     FRONTEND_URL: str = "http://localhost:5173"
     SMTP_HOST: str | None = None
