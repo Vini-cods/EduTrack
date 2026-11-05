@@ -2,6 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assistantHistory, assistantSourcePath, assistantErrorMessage } from '../src/lib/assistant.ts';
 
+test('assistant history preserves complete Unicode code points at the content limit', () => {
+  const content = 'a'.repeat(3999) + '🎓' + 'restante';
+  const [entry] = assistantHistory([{ role: 'user', content, sources: [{ id: 7 }] }]);
+  assert.equal(Array.from(entry.content).length, 4000);
+  assert.equal(entry.content.isWellFormed(), true);
+  assert.equal(entry.content, 'a'.repeat(3999) + '🎓');
+  assert.deepEqual(Object.keys(entry), ['role', 'content']);
+});
+
 test('assistant forwards only bounded recent roles/content, without source metadata', () => {
   const messages = Array.from({ length: 18 }, (_, index) => ({
     role: index % 2 ? 'assistant' : 'user', content: `${index}:` + 'a'.repeat(5000), sources: [{ id: 999 }],

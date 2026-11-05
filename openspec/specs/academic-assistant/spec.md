@@ -79,8 +79,8 @@ O sistema SHALL oferecer feedback de carregamento, cancelamento e nova tentativa
 
 ## Validação realizada e pendências
 
-- API: 24 testes novos e 263/263 na suíte completa, com transporte simulado. Cobertura de autenticação, isolamento entre dois usuários, vínculos inconsistentes, limites, ausência de escritas, opt-out, payload OpenAI, concorrência e erros/timeout.
-- Interface: 124/124 testes, incluindo histórico limitado, caminhos internos seguros, erros e regras de limites/pausas/posicionamento do pet. TypeScript e build Vite aprovados. Descarte de respostas antigas revisado no hook e isolamento por chave de usuário/sessão.
+- API: 24 testes novos e 338/338 na suíte completa integrada, com transporte simulado. Cobertura de autenticação, isolamento entre dois usuários, vínculos inconsistentes, limites, ausência de escritas, opt-out, payload OpenAI, concorrência e erros/timeout.
+- Interface: 160/160 na suíte integrada, incluindo histórico limitado, caminhos internos seguros, erros e regras de limites/pausas/posicionamento do pet. Depois, 4/4 testes focados aprovaram o corte Unicode do histórico, cuja regressão reproduziu o surrogate isolado anterior; esse recorte se sobrepõe à suíte. TypeScript e build Vite integrado aprovados já com essa correção. Descarte de respostas antigas revisado no hook e isolamento por chave de usuário/sessão.
 - Navegador: pet/painel, estado sem configuração, comentário local, arraste, setas/Home, ocultar/restaurar, caminhada automática, Escape/foco, temas e viewport 390×844 conferidos. Sem transbordamento horizontal na área testada.
 - PENDENTE: credencial/saldo/acesso ao modelo e respostas reais OpenAI. Não houve chamada externa paga, migration ou alteração acadêmica para homologar esta entrega. Movimento reduzido/aba oculta são cobertos por regras/revisão, sem alteração da preferência do dispositivo durante o QA.
 

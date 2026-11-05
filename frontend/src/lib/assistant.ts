@@ -29,7 +29,7 @@ export const ASSISTANT_HISTORY_LIMIT = 10;
 
 /** Keep complete recent turns, and never send presentation metadata as instructions. */
 export function assistantHistory(messages: AssistantHistoryItem[]): AssistantHistoryItem[] {
-  return messages.slice(-ASSISTANT_HISTORY_LIMIT).map(({ role, content }) => ({ role, content: content.slice(0, 4000) }));
+  return messages.slice(-ASSISTANT_HISTORY_LIMIT).map(({ role, content }) => ({ role, content: Array.from(content).slice(0, 4000).join('') }));
 }
 
 export function assistantSourcePath(source: AssistantSource): string | null {

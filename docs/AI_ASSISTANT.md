@@ -22,7 +22,7 @@ Sem chave, as outras áreas do EduTrack continuam funcionando. O pet abre o pain
 
 ## Contexto e privacidade
 
-Ao enviar uma mensagem, o backend encaminha à OpenAI o texto e as últimas mensagens da conversa. Com o contexto acadêmico habilitado, inclui também um resumo limitado e isolado pelo usuário autenticado:
+Ao enviar uma mensagem, o backend encaminha à OpenAI o texto e até dez mensagens anteriores da conversa, com até 4.000 pontos de código por mensagem de histórico, preservando emojis inteiros no corte. Com o contexto acadêmico habilitado, inclui também um resumo limitado e isolado pelo usuário autenticado:
 
 - Até 20 tarefas abertas, priorizadas por prazo e prioridade, com disciplina e estimativa quando disponíveis.
 - Até 20 próximos compromissos em uma janela de 14 dias.
@@ -71,5 +71,7 @@ Para homologar a conexão real, configure a chave local, entre na conta, abra a 
 | `d8c8000` | Backend OpenAI autenticado, configuração, contexto e 24 testes novos. |
 | `aed64b6` | Morgana vetorial conforme referência e estados de animação/caminhada. |
 | `f8d3bae` | Chat, pet livre, controles, dicas locais e validação final da interface. |
+| `3dc288b` | Guia operacional, configuração OpenAI e consolidação da especificação. |
+| `8887cfd` | Integração das correções remotas até `75e0f86`, preservando os dois históricos e revalidando o conjunto. |
 
 A configuração real da chave não faz parte do Git. A edição de documentação que consolida esta tabela permanece identificada pelo próprio histórico do repositório.
