@@ -68,6 +68,8 @@ class TaskResponse(TaskBase):
     """
     Schema de resposta para Task.
     """
+    # Restrições de escrita não invalidam nem reescrevem títulos legados.
+    title: str
     id: int
     subject_id: int
     created_at: datetime

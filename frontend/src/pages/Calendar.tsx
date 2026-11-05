@@ -11,7 +11,7 @@ import { WeekView } from '../components/calendar/WeekView';
 import { DayView } from '../components/calendar/DayView';
 import { EventModal } from '../components/calendar/EventModal';
 import { TaskFormModal } from '../components/tasks/TaskFormModal';
-import { getMonthGrid, getWeekDays, CATEGORY_META, toDatetimeLocalValue } from '../lib/calendar';
+import { getMonthGrid, getWeekDays, CATEGORY_META, shiftCalendarPeriod, toDatetimeLocalValue } from '../lib/calendar';
 import { projectCalendarItems } from '../lib/calendarProjection';
 import type { EventCategory } from '../types';
 
@@ -150,11 +150,7 @@ export const Calendar: React.FC = () => {
   };
 
   const navigate = (direction: 1 | -1) => {
-    const d = new Date(currentDate);
-    if (view === 'month') d.setMonth(d.getMonth() + direction);
-    else if (view === 'week') d.setDate(d.getDate() + 7 * direction);
-    else d.setDate(d.getDate() + direction);
-    setCurrentDate(d);
+    setCurrentDate((date) => shiftCalendarPeriod(date, view, direction));
   };
 
   const goToday = () => setCurrentDate(new Date());

@@ -15,7 +15,7 @@ import { Tabs } from '../components/ui/Tabs';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { StatCardSkeleton } from '../components/ui/Skeleton';
-import { CATEGORY_META, MATERIAL_CATEGORIES, STATUS_META, MATERIAL_STATUSES } from '../lib/materials';
+import { CATEGORY_META, MATERIAL_CATEGORIES, STATUS_META, MATERIAL_STATUSES, normalizeMaterialTitle, validateMaterialTitle } from '../lib/materials';
 
 type StatusTab = 'todos' | MaterialStatus;
 
@@ -392,7 +392,7 @@ const MaterialModal: React.FC<{
   onSaved: () => void;
 }> = ({ open, onClose, subjects, subjectsLoading, subjectsError, onRetrySubjects, material, defaultSubjectId, onSaved }) => {
   const isEditing = !!material;
-  const { register, handleSubmit, reset } = useForm<MaterialFormValues>();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<MaterialFormValues>();
   const [saving, setSaving] = useState(false);
   const savingLock = useRef(false);
 
@@ -416,7 +416,7 @@ const MaterialModal: React.FC<{
     savingLock.current = true;
     setSaving(true);
     const payload = {
-      title: values.title,
+      title: normalizeMaterialTitle(values.title),
       subject_id: Number(values.subject_id),
       category: values.category,
       url: values.url || null,
@@ -448,18 +448,25 @@ const MaterialModal: React.FC<{
         {!subjectsLoading && !subjectsError && subjects.length === 0 && <p className="mb-4 text-sm text-graphite">Cadastre uma disciplina antes de adicionar materiais.</p>}
         <fieldset disabled={saving} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Título</label>
+            <label htmlFor="material-title" className="block text-sm font-medium text-graphite mb-1.5">Título</label>
             <input
-              {...register('title', { required: true })}
+              id="material-title"
+              {...register('title', { validate: value => validateMaterialTitle(value) || true })}
+              aria-invalid={errors.title ? true : undefined}
+              aria-describedby={errors.title ? 'material-title-error' : undefined}
               placeholder="Ex.: Slides da aula 3"
               className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-ink placeholder:text-muted outline-none focus:border-crimson focus:ring-4 focus:ring-crimson/10 transition-colors"
             />
+            {errors.title && <p id="material-title-error" role="alert" className="mt-1.5 text-sm text-danger">{errors.title.message}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Disciplina</label>
+              <label htmlFor="material-subject" className="block text-sm font-medium text-graphite mb-1.5">Disciplina</label>
               <select
-                {...register('subject_id', { required: true })}
+                id="material-subject"
+                {...register('subject_id', { required: 'Selecione uma disciplina.' })}
+                aria-invalid={errors.subject_id ? true : undefined}
+                aria-describedby={errors.subject_id ? 'material-subject-error' : undefined}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
               >
                 <option value="" disabled>
@@ -471,10 +478,12 @@ const MaterialModal: React.FC<{
                   </option>
                 ))}
               </select>
+              {errors.subject_id && <p id="material-subject-error" role="alert" className="mt-1.5 text-sm text-danger">{errors.subject_id.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-graphite mb-1.5">Tipo</label>
+              <label htmlFor="material-category" className="block text-sm font-medium text-graphite mb-1.5">Tipo</label>
               <select
+                id="material-category"
                 {...register('category')}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-surface text-ink text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-crimson/20"
               >
@@ -487,8 +496,9 @@ const MaterialModal: React.FC<{
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Link (opcional)</label>
+            <label htmlFor="material-url" className="block text-sm font-medium text-graphite mb-1.5">Link (opcional)</label>
             <input
+              id="material-url"
               {...register('url')}
               type="url"
               placeholder="https://..."
@@ -496,8 +506,9 @@ const MaterialModal: React.FC<{
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-graphite mb-1.5">Notas (opcional)</label>
+            <label htmlFor="material-description" className="block text-sm font-medium text-graphite mb-1.5">Notas (opcional)</label>
             <textarea
+              id="material-description"
               {...register('description')}
               rows={3}
               placeholder="Contexto, resumo ou anotações sobre este material"

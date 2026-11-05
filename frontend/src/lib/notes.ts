@@ -11,5 +11,6 @@ export function validateNoteInput(note: NoteInput): string | null {
 }
 export function noteExcerpt(content: string, limit = 140): string {
   const text = content.replace(/\s+/g, ' ').trim();
-  return text.length > limit ? text.slice(0, limit).trimEnd() + '…' : text;
+  const characters = Array.from(text);
+  return characters.length > limit ? characters.slice(0, limit).join('').trimEnd() + '…' : text;
 }

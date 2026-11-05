@@ -3,10 +3,19 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, field_validator
+
+
+def normalize_tag(value: object) -> object:
+    return value.casefold() if isinstance(value, str) else value
+
 
 NoteTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
-NoteTag = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=32)]
+NoteTag = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=32),
+    BeforeValidator(normalize_tag),
+]
 PositiveId = Annotated[int, Field(gt=0)]
 
 
@@ -50,6 +59,8 @@ class NoteUpdate(BaseModel):
 
 
 class NoteResponse(NoteBase):
+    # Tags já expandidas pela normalização antiga continuam legíveis.
+    tags: list[str] = Field(default_factory=list)
     id: int
     subject_name: str | None = None
     subject_color: str | None = None

@@ -1,11 +1,13 @@
 """Schemas Pydantic para materiais de estudo."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
 from app.models.material import MaterialCategory, MaterialStatus
+
+MaterialTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 
 
 class MaterialBase(BaseModel):
@@ -18,16 +20,23 @@ class MaterialBase(BaseModel):
 
 
 class MaterialCreate(MaterialBase):
-    pass
+    title: MaterialTitle
 
 
 class MaterialUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[MaterialTitle] = None
     category: Optional[MaterialCategory] = None
     status: Optional[MaterialStatus] = None
     url: Optional[str] = None
     description: Optional[str] = None
     subject_id: Optional[int] = None
+
+    @field_validator("title", "category", "status", "subject_id")
+    @classmethod
+    def required_fields_cannot_be_null(cls, value):
+        if value is None:
+            raise ValueError("O campo não pode ser nulo")
+        return value
 
 
 class MaterialStatusUpdate(BaseModel):

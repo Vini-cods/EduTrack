@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from tests.conftest import TestingSessionLocal
 from app.models.note import Note
 from app.models.material import Material, MaterialCategory, MaterialStatus
@@ -72,3 +74,81 @@ def test_search_page_validation_and_authentication(client, academic_data):
         for params in ({"limit": 51}, {"limit": 0}, {"offset": -1}, {"q": "x" * 201}, {"subject_id": 0}):
             assert client.get(path, headers=academic_data["owner"]["headers"], params=params).status_code == 422
     assert client.get("/api/v1/notes/search", headers=academic_data["owner"]["headers"], params={"q": "x", "limit": 21}).status_code == 422
+
+
+def test_json_like_note_content_is_literal_with_or_without_leading_space(client, academic_data):
+    owner, other = academic_data["owner"], academic_data["other"]
+    literal = '["Revisão", "Prova"]'
+    notes = []
+    for index, content in enumerate((literal, " " + literal)):
+        response = client.post("/api/v1/notes/", headers=owner["headers"],
+                               json={"title": f"Exemplo {index}", "content": content})
+        assert response.status_code == 201
+        notes.append(response.json())
+    tagged = client.post("/api/v1/notes/", headers=owner["headers"],
+                         json={"title": "Só tags", "tags": ["Revisão", "Prova"]}).json()
+    private = client.post("/api/v1/notes/", headers=other["headers"],
+                          json={"title": "Privada", "content": literal}).json()
+    expected = {note["id"] for note in notes}
+    params = {"q": '["revisao",'}
+    for path in ("/api/v1/notes/", "/api/v1/notes/page", "/api/v1/notes/search"):
+        response = client.get(path, headers=owner["headers"], params=params)
+        assert response.status_code == 200
+        body = response.json()
+        items = body if isinstance(body, list) else body["items"]
+        assert {item["id"] for item in items} == expected
+        if isinstance(body, dict):
+            assert body["total"] == 2
+    tag_search = client.get("/api/v1/notes/search", headers=owner["headers"],
+                            params={"q": "#REVISAO #prova"}).json()
+    assert {item["id"] for item in tag_search["items"]} == expected | {tagged["id"]}
+    private_search = client.get("/api/v1/notes/search", headers=other["headers"], params=params).json()
+    assert [item["id"] for item in private_search["items"]] == [private["id"]]
+    for note in notes:
+        assert client.get(f"/api/v1/notes/{note['id']}", headers=owner["headers"]).json()["content"] == note["content"]
+
+
+@pytest.mark.parametrize("field", ["title", "subject", "task"])
+def test_json_like_note_title_and_context_keep_literal_punctuation(client, academic_data, field):
+    owner = academic_data["owner"]
+    literal = '["Revisão", "Prova"]'
+    payload = {"title": "Contexto literal"}
+    if field == "title":
+        payload["title"] = literal
+    elif field == "subject":
+        assert client.put(f"/api/v1/subjects/{owner['subject_id']}", headers=owner["headers"],
+                          json={"name": literal}).status_code == 200
+        payload["subject_id"] = owner["subject_id"]
+    else:
+        assert client.put(f"/api/v1/tasks/{owner['task_id']}", headers=owner["headers"],
+                          json={"title": literal}).status_code == 200
+        payload["task_id"] = owner["task_id"]
+    note = client.post("/api/v1/notes/", headers=owner["headers"], json=payload).json()
+    fallback = client.post("/api/v1/notes/", headers=owner["headers"],
+                           json={"title": "Outro exemplo", "content": literal}).json()
+    params = {"q": '["REVISAO",'}
+    result = client.get("/api/v1/notes/search", headers=owner["headers"], params=params).json()
+    assert {item["id"] for item in result["items"]} == {note["id"], fallback["id"]}
+    if field == "title":
+        assert result["items"][0]["id"] == note["id"]
+    assert client.get("/api/v1/notes/search", headers=academic_data["other"]["headers"], params=params).json()["total"] == 0
+
+
+@pytest.mark.parametrize("field", ["title", "description", "subject"])
+def test_json_like_material_fields_keep_literal_punctuation_and_ownership(client, academic_data, field):
+    owner = academic_data["owner"]
+    literal = '["Revisão", "Prova"]'
+    payload = {"title": "Material literal", "subject_id": owner["subject_id"]}
+    if field == "subject":
+        assert client.put(f"/api/v1/subjects/{owner['subject_id']}", headers=owner["headers"],
+                          json={"name": literal}).status_code == 200
+    else:
+        payload[field] = literal
+    created = client.post("/api/v1/materials/", headers=owner["headers"], json=payload)
+    assert created.status_code == 201
+    params = {"q": '["revisao",'}
+    result = client.get("/api/v1/materials/page", headers=owner["headers"], params=params).json()
+    assert result["total"] == 1
+    assert [item["id"] for item in result["items"]] == [created.json()["id"]]
+    assert result["status_counts"]["todos"] == 1
+    assert client.get("/api/v1/materials/page", headers=academic_data["other"]["headers"], params=params).json()["total"] == 0

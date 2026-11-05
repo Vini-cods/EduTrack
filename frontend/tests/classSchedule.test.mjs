@@ -10,6 +10,22 @@ test('grade semanal respeita segunda=0 e período inclusivo', () => {
   assert.equal(payload.location, 'Sala 12');
   assert.equal(payload.start_datetime, '2026-10-12T19:00:00');
 });
+test('título da aula preserva Unicode dentro do limite de 255 caracteres da API', () => {
+  const subjectName = 'a'.repeat(246) + '🧪';
+  const payload = buildClassSchedulePayload(base, subjectName);
+  assert.equal(payload.title, `Aula de ${subjectName}`);
+  assert.equal(Array.from(payload.title).length, 255);
+  assert.equal(payload.title.isWellFormed(), true);
+  assert.equal(payload.subject_id, base.subjectId);
+  assert.deepEqual(payload.recurrence, { type: 'weekly', days_of_week: base.days, until: base.endDate });
+});
+test('título da aula trunca somente caracteres completos além do limite', () => {
+  const title = buildClassSchedulePayload(base, '🧪'.repeat(255)).title;
+  assert.equal(title, `Aula de ${'🧪'.repeat(247)}`);
+  assert.equal(Array.from(title).length, 255);
+  assert.equal(title.isWellFormed(), true);
+  assert.equal(buildClassSchedulePayload(base, 'a'.repeat(255)).title, `Aula de ${'a'.repeat(247)}`);
+});
 test('grade exige dias, datas reais e intervalo de horário positivo no mesmo dia', () => {
   for (const change of [{ days: [] }, { days: [7] }, { startDate: '2026-02-30' }, { endDate: '2026-10-11' }, { startTime: '24:00' }, { endTime: '19:00' }, { endTime: '00:30' }]) {
     assert.ok(validateClassSchedule({ ...base, ...change }));

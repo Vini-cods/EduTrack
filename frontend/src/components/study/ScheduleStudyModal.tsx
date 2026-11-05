@@ -33,9 +33,10 @@ export const ScheduleStudyModal: React.FC<{
 
   useEffect(() => { setAllowConflict(false); }, [date, time, minutes, task]);
 
-  const preview = useMemo(() => {
-    if (!task) return null;
-    try { return buildStudyBlock(task, date, time, Number(minutes)); } catch { return null; }
+  const { preview, validationError } = useMemo(() => {
+    if (!task) return { preview: null, validationError: null };
+    try { return { preview: buildStudyBlock(task, date, time, Number(minutes)), validationError: null }; }
+    catch (cause) { return { preview: null, validationError: cause instanceof Error ? cause.message : 'Confira os dados do bloco de estudo.' }; }
   }, [task, date, time, minutes]);
   const conflicts = preview ? conflictingEvents(events, preview.start_datetime, preview.end_datetime) : [];
   const afterDeadline = !!preview && studyBlockPastDeadline(task?.due_date, preview.end_datetime);
@@ -43,7 +44,7 @@ export const ScheduleStudyModal: React.FC<{
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving || !ready) return;
-    if (!preview) { setError('Informe data, horário e duração entre 5 e 720 minutos.'); return; }
+    if (!preview) { setError(validationError || 'Informe data, horário e duração entre 5 e 720 minutos.'); return; }
     if (conflicts.length && !allowConflict) { setError('Revise o conflito de horário antes de agendar.'); return; }
     setSaving(true);
     setError(null);

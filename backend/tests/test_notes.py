@@ -1,5 +1,7 @@
 """Persistência e autorização das anotações, incluindo vínculos históricos."""
 
+import pytest
+
 
 def test_notes_crud_search_filters_and_normalization(client, academic_data):
     owner = academic_data["owner"]
@@ -66,6 +68,83 @@ def test_note_validation_and_failed_update_are_atomic(client, academic_data):
                     {"title": "x" * 256}, {"content": "x" * 100_001}, {"tags": ["x" * 33]}, {"tags": [str(index) for index in range(11)]}):
         assert client.put(f"/api/v1/notes/{note['id']}", headers=headers, json=invalid).status_code == 422
     assert client.get(f"/api/v1/notes/{note['id']}", headers=headers).json()["title"] == "Preservar"
+
+
+@pytest.mark.parametrize("tag", ["ß" * 17, "ﬃ" * 11, "İ" * 17])
+def test_note_rejects_tag_casefold_expansion_before_creation(client, academic_data, tag):
+    headers = academic_data["owner"]["headers"]
+    response = client.post("/api/v1/notes/", headers=headers,
+                           json={"title": "Unicode", "tags": [tag]})
+    assert response.status_code == 422
+    assert client.get("/api/v1/notes/", headers=headers).json() == []
+    assert client.get("/api/v1/notes/page", headers=headers).json()["total"] == 0
+
+
+@pytest.mark.parametrize("tag", ["ß" * 17, "ﬃ" * 11, "İ" * 17])
+def test_note_rejects_tag_casefold_expansion_without_mutating_saved_content(client, academic_data, tag):
+    headers = academic_data["owner"]["headers"]
+    original = client.post("/api/v1/notes/", headers=headers,
+                           json={"title": "Preservar", "content": "Conteúdo original", "tags": ["prova"]}).json()
+    url = f"/api/v1/notes/{original['id']}"
+    response = client.put(url, headers=headers,
+                          json={"title": "Não salvar", "content": "Alterado", "tags": [tag]})
+    assert response.status_code == 422
+    assert client.get(url, headers=headers).json() == original
+    assert client.get("/api/v1/notes/page", headers=headers).json()["items"] == [original]
+
+
+def test_note_casefold_boundary_is_readable_deduplicated_and_private(client, academic_data):
+    headers = academic_data["owner"]["headers"]
+    tags = ["ß" * 16, "SS" * 16, "Straße", "STRASSE"]
+    response = client.post("/api/v1/notes/", headers=headers, json={"title": "Unicode", "tags": tags})
+    assert response.status_code == 201
+    note = response.json()
+    assert note["tags"] == ["ss" * 16, "strasse"]
+    url = f"/api/v1/notes/{note['id']}"
+    assert client.get(url, headers=headers).json()["tags"] == note["tags"]
+    assert client.get("/api/v1/notes/", headers=headers).json()[0]["tags"] == note["tags"]
+    assert client.get("/api/v1/notes/page", headers=headers).json()["items"][0]["tags"] == note["tags"]
+    assert client.get("/api/v1/notes/search", params={"q": "Unicode"}, headers=headers).json()["items"][0]["tags"] == note["tags"]
+    updated = client.put(url, headers=headers, json={"tags": tags})
+    assert updated.status_code == 200
+    assert updated.json()["tags"] == note["tags"]
+    assert client.put(url, headers=headers, json={"content": "Editado sem reenviar tags"}).status_code == 200
+    other = academic_data["other"]["headers"]
+    assert client.get(url, headers=other).status_code == 404
+    assert client.get("/api/v1/notes/", headers=other).json() == []
+
+
+@pytest.mark.parametrize("tag", [None, 123])
+def test_note_tag_normalization_keeps_non_string_inputs_invalid(client, academic_data, tag):
+    response = client.post("/api/v1/notes/", headers=academic_data["owner"]["headers"],
+                           json={"title": "Inválida", "tags": [tag]})
+    assert response.status_code == 422
+
+
+def test_legacy_expanded_note_tag_remains_readable_and_editable_without_rewriting_tags(client, academic_data):
+    from app.models.note import Note
+    from tests.conftest import TestingSessionLocal
+
+    owner = academic_data["owner"]
+    legacy_tags = ["ss" * 17]
+    with TestingSessionLocal() as db:
+        note = Note(user_id=owner["user_id"], title="Legado Unicode", content="Preservar", tags=legacy_tags)
+        db.add(note)
+        db.commit()
+        note_id = note.id
+
+    headers = owner["headers"]
+    url = f"/api/v1/notes/{note_id}"
+    response = client.get(url, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["tags"] == legacy_tags
+    assert client.get("/api/v1/notes/", headers=headers).json()[0]["tags"] == legacy_tags
+    assert client.get("/api/v1/notes/page", headers=headers).json()["items"][0]["tags"] == legacy_tags
+    assert client.get("/api/v1/notes/search", params={"q": "Unicode"}, headers=headers).json()["items"][0]["tags"] == legacy_tags
+    edited = client.put(url, headers=headers, json={"content": "Conteúdo editado sem reenviar tags"})
+    assert edited.status_code == 200
+    assert edited.json()["tags"] == legacy_tags
+    assert client.get(url, headers=academic_data["other"]["headers"]).status_code == 404
 
 
 def test_replacing_task_derives_subject_and_context_can_be_cleared(client, academic_data):

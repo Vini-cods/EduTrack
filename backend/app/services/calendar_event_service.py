@@ -35,16 +35,20 @@ class DuplicateClassError(ValueError):
         super().__init__("Já existe uma aula dessa disciplina com a mesma data e horário. Revise a grade antes de salvar.")
 
 
+def is_duplicate_class_error(exc: IntegrityError) -> bool:
+    # SQLite identifica a chave pelas colunas; SQL Server/PostgreSQL usam
+    # o nome do índice. Não converta violações de outras constraints em 409.
+    error = str(exc.orig)
+    columns = "calendar_events.user_id, calendar_events.subject_id, calendar_events.start_datetime, calendar_events.end_datetime"
+    return "uq_calendar_classes_subject_interval" in error or f"UNIQUE constraint failed: {columns}" in error
+
+
 def _commit_events(db: Session) -> None:
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        # SQLite identifica a chave pelas colunas; SQL Server/PostgreSQL usam
-        # o nome do índice. Não converta violações de outras constraints em 409.
-        error = str(exc.orig)
-        columns = "calendar_events.user_id, calendar_events.subject_id, calendar_events.start_datetime, calendar_events.end_datetime"
-        if "uq_calendar_classes_subject_interval" in error or f"UNIQUE constraint failed: {columns}" in error:
+        if is_duplicate_class_error(exc):
             raise DuplicateClassError() from exc
         raise
 
@@ -103,7 +107,7 @@ def expand_recurrence(
         if matches:
             if len(occurrences) == MAX_OCCURRENCES:
                 raise CalendarEventValidationError("A recorrência ultrapassa o limite de 260 ocorrências. Reduza o período ou os dias selecionados.")
-            occurrences.append((current, current + duration if duration else None))
+            occurrences.append((current, current + duration if duration is not None else None))
         current += timedelta(days=1)
 
     return occurrences
@@ -182,6 +186,13 @@ def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Op
     except AcademicContextNotFoundError:
         return None
 
+    # A agenda persiste hora civil, assim como a edição. Valide esse mesmo
+    # intervalo antes de gravar e calcule a duração recorrente sem converter
+    # offsets em horas extras/ausentes ou descartar um fim com duração UTC zero.
+    start = payload.start_datetime.replace(tzinfo=None)
+    end = payload.end_datetime.replace(tzinfo=None) if payload.end_datetime is not None else None
+    validate_interval(start, end)
+
     common = dict(
         user_id=user_id,
         subject_id=subject_id,
@@ -194,11 +205,11 @@ def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Op
     )
 
     if payload.recurrence is None:
-        _validate_class_duplicates(db, user_id, subject_id, payload.category, [(payload.start_datetime, payload.end_datetime)])
+        _validate_class_duplicates(db, user_id, subject_id, payload.category, [(start, end)])
         db_event = CalendarEvent(
             **common,
-            start_datetime=payload.start_datetime,
-            end_datetime=payload.end_datetime,
+            start_datetime=start,
+            end_datetime=end,
             recurrence_group_id=None,
         )
         db.add(db_event)
@@ -206,7 +217,7 @@ def create_events(db: Session, payload: CalendarEventCreate, user_id: int) -> Op
         db.refresh(db_event)
         return [db_event]
 
-    occurrences = expand_recurrence(payload.start_datetime, payload.end_datetime, payload.recurrence)
+    occurrences = expand_recurrence(start, end, payload.recurrence)
     if not occurrences:
         raise CalendarEventValidationError("A recorrência não contém nenhuma ocorrência no intervalo selecionado")
     _validate_class_duplicates(db, user_id, subject_id, payload.category, occurrences)
@@ -244,13 +255,23 @@ def update_event(db: Session, event_id: int, update: CalendarEventUpdate, user_i
     if new_task_id is not None or "subject_id" in update_data:
         update_data["subject_id"] = resolved_subject_id
 
-    validate_interval(
-        update_data.get("start_datetime", db_event.start_datetime),
-        update_data.get("end_datetime", db_event.end_datetime),
-    )
+    # Um par explicitamente enviado continua sujeito à validação de fuso;
+    # o outro extremo recuperado do SQLite já não possui esse offset.
+    if "start_datetime" in update_data and "end_datetime" in update_data:
+        validate_interval(update_data["start_datetime"], update_data["end_datetime"])
+    # A agenda usa hora civil. Preserve o relógio informado, sem convertê-lo
+    # para UTC, antes de comparar uma atualização parcial ao valor persistido.
+    start = update_data.get("start_datetime", db_event.start_datetime).replace(tzinfo=None)
+    end = update_data.get("end_datetime", db_event.end_datetime)
+    end = end.replace(tzinfo=None) if end is not None else None
+    validate_interval(start, end)
+    if "start_datetime" in update_data:
+        update_data["start_datetime"] = start
+    if "end_datetime" in update_data:
+        update_data["end_datetime"] = end
     _validate_class_duplicates(
         db, user_id, resolved_subject_id, update_data.get("category", db_event.category),
-        [(update_data.get("start_datetime", db_event.start_datetime), update_data.get("end_datetime", db_event.end_datetime))],
+        [(start, end)],
         exclude_id=db_event.id,
     )
 

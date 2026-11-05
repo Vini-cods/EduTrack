@@ -1,10 +1,23 @@
 import type { CalendarEventWithSubject, StudySessionWithContext, Task, TaskWithSubject } from '../types/index.ts';
 import { parseDateOnly, startOfWeek } from './date.ts';
 import { PRIORITY_META } from './tasks.ts';
-import { toDatetimeLocalValue } from './calendar.ts';
 
 export type GoalFilter = 'active' | 'week' | 'overdue' | 'unscheduled' | 'completed' | 'all';
 export type GoalSort = 'priority' | 'deadline';
+
+/** Referência sem DST para os componentes locais; setUTCFullYear preserva anos 1–99. */
+function localCivilTime(date: Date): number {
+  const civil = new Date(0);
+  civil.setUTCFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+  civil.setUTCHours(date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+  return civil.getTime();
+}
+
+function calendarTime(value: string): number {
+  // Eventos sem offset já são civis. Com offset, usamos a hora local exibida no calendário.
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)
+    ? localCivilTime(new Date(value)) : Date.parse(`${value}Z`);
+}
 
 export function isStudyGoal(task: Task): boolean {
   return Number.isFinite(task.estimated_hours) && (task.estimated_hours ?? 0) > 0;
@@ -50,12 +63,17 @@ export function studyWeekSummary(tasks: TaskWithSubject[], events: CalendarEvent
   const start = startOfWeek(now);
   const end = new Date(start);
   end.setDate(end.getDate() + 7);
+  // A agenda conta horas civis; a execução abaixo continua usando instantes UTC.
+  const civilStart = new Date(localCivilTime(start));
+  civilStart.setUTCHours(0, 0, 0, 0);
+  const calendarStart = civilStart.getTime();
+  const calendarEnd = calendarStart + 7 * 86_400_000;
   const goals = filterStudyGoals(tasks, events, 'week', '', 'priority', now);
   const scheduledSeconds = events.reduce((total, event) => {
     if (event.category !== 'estudo' || !event.end_datetime) return total;
-    const overlap = Math.min(new Date(event.end_datetime).getTime(), end.getTime()) -
-      Math.max(new Date(event.start_datetime).getTime(), start.getTime());
-    return total + Math.max(0, overlap / 1000);
+    const overlap = Math.min(calendarTime(event.end_datetime), calendarEnd) -
+      Math.max(calendarTime(event.start_datetime), calendarStart);
+    return Number.isFinite(overlap) ? total + Math.max(0, overlap / 1000) : total;
   }, 0);
   // O contrato atual não armazena segmentos por dia. Atribuímos cada sessão
   // concluída à semana do início, sem fingir precisão na virada de semana.
@@ -77,21 +95,32 @@ export function formatStudyDuration(seconds: number): string {
 }
 
 export function buildStudyBlock(task: Task, date: string, time: string, minutes: number) {
-  const start = new Date(`${date}T${time}`);
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(minutes) || minutes < 5 || minutes > 720) {
+  const value = `${date}T${time}`;
+  // UTC serve só de referência aritmética; o payload mantém o horário civil sem offset.
+  const start = new Date(`${value}Z`);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) || !Number.isFinite(start.getTime()) ||
+      start.getUTCFullYear() < 1 || start.toISOString().slice(0, 16) !== value ||
+      !Number.isInteger(minutes) || minutes < 5 || minutes > 720) {
     throw new Error('Informe data, horário e duração entre 5 e 720 minutos.');
   }
   const end = new Date(start.getTime() + minutes * 60_000);
+  if (end.getUTCFullYear() > 9999) {
+    throw new Error('Informe data, horário e duração entre 5 e 720 minutos.');
+  }
+  const endValue = end.toISOString().slice(0, 16);
+  if (localCivilTime(new Date(value)) !== start.getTime() || localCivilTime(new Date(endValue)) !== end.getTime()) {
+    throw new Error('O início ou fim não existe no fuso local por mudança de horário. Escolha outro horário ou duração.');
+  }
   return { title: task.title, category: 'estudo' as const, subject_id: task.subject_id, task_id: task.id,
-    start_datetime: toDatetimeLocalValue(start), end_datetime: toDatetimeLocalValue(end) };
+    start_datetime: value, end_datetime: endValue };
 }
 
 export function conflictingEvents(events: CalendarEventWithSubject[], start: string, end: string): CalendarEventWithSubject[] {
-  const from = new Date(start).getTime();
-  const to = new Date(end).getTime();
+  const from = calendarTime(start);
+  const to = calendarTime(end);
   return events.filter((event) => {
-    const eventStart = new Date(event.start_datetime).getTime();
-    const eventEnd = new Date(event.end_datetime || event.start_datetime).getTime();
+    const eventStart = calendarTime(event.start_datetime);
+    const eventEnd = calendarTime(event.end_datetime || event.start_datetime);
     return eventEnd > eventStart ? eventStart < to && eventEnd > from : eventStart >= from && eventStart < to;
   });
 }
