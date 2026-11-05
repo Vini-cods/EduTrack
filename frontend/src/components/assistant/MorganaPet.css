@@ -1,0 +1,86 @@
+.morgana-pet {
+  display: inline-block;
+  flex: 0 0 auto;
+  line-height: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.morgana-pet svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.morgana-pet__shadow { fill: var(--color-navy); opacity: .12; }
+.morgana-pet__figure { transform-origin: 82px 251px; }
+.morgana-pet__head { transform-origin: 80px 139px; }
+.morgana-pet__eyes { transform-origin: 77px 59px; animation: morgana-blink 8s ease-in-out infinite; }
+.morgana-pet__tail { transform-origin: 110px 209px; animation: morgana-tail 5s ease-in-out infinite; }
+.morgana-pet__leg--left { transform-origin: 63px 216px; }
+.morgana-pet__leg--right { transform-origin: 96px 217px; }
+.morgana-pet__concern, .morgana-pet__mouth-closed { opacity: 0; }
+.morgana-pet__mouth-open { transform-origin: 75px 105px; }
+
+.morgana-pet[data-state="thinking"] .morgana-pet__head { animation: morgana-think 2.8s ease-in-out infinite; }
+.morgana-pet[data-state="thinking"] .morgana-pet__tail { animation-duration: 2s; }
+.morgana-pet[data-state="thinking"] .morgana-pet__mouth-open,
+.morgana-pet[data-state="error"] .morgana-pet__mouth-open { opacity: 0; }
+.morgana-pet[data-state="thinking"] .morgana-pet__mouth-closed,
+.morgana-pet[data-state="error"] .morgana-pet__mouth-closed { opacity: 1; }
+.morgana-pet[data-state="speaking"] .morgana-pet__head { animation: morgana-nod .65s ease-in-out 4; }
+.morgana-pet[data-state="speaking"] .morgana-pet__mouth-open { animation: morgana-speak .4s ease-in-out 7; }
+.morgana-pet[data-state="error"] .morgana-pet__concern { opacity: 1; }
+.morgana-pet[data-state="error"] .morgana-pet__head { transform: rotate(-5deg); }
+
+.morgana-pet[data-state="walking"] .morgana-pet__leg--left { animation: morgana-step-left .54s ease-in-out infinite; }
+.morgana-pet[data-state="walking"] .morgana-pet__leg--right { animation: morgana-step-right .54s ease-in-out infinite; }
+.morgana-pet[data-state="walking"] .morgana-pet__figure { animation: morgana-walk-bob .27s ease-in-out infinite; }
+.morgana-pet[data-state="walking"] .morgana-pet__tail { animation-duration: 1.08s; }
+
+.morgana-pet[data-paused="true"] *, .morgana-pet[data-paused="true"] { animation-play-state: paused !important; }
+
+@keyframes morgana-blink {
+  0%, 43%, 46%, 80%, 83%, 100% { transform: scaleY(1); }
+  44.5%, 81.5% { transform: scaleY(.08); }
+}
+
+@keyframes morgana-tail {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(4deg); }
+}
+
+@keyframes morgana-think {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(3deg) translateY(-1px); }
+}
+
+@keyframes morgana-nod {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px) rotate(-2deg); }
+}
+
+@keyframes morgana-speak {
+  0%, 100% { transform: scaleY(.42); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes morgana-step-left {
+  0%, 100% { transform: rotate(-12deg); }
+  50% { transform: rotate(12deg) translateY(-3px); }
+}
+
+@keyframes morgana-step-right {
+  0%, 100% { transform: rotate(12deg) translateY(-3px); }
+  50% { transform: rotate(-12deg); }
+}
+
+@keyframes morgana-walk-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .morgana-pet *, .morgana-pet { animation: none !important; }
+}
