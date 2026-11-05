@@ -1,9 +1,10 @@
 # EduTrack — estado de desenvolvimento
 
-Atualizado em 27/10/2026.
+Atualizado em 05/11/2026.
 
 ## Entrega atual
 
+- Em implementação em 05/11: assistente acadêmica Morgana, com chat consultivo via OpenAI configurada no backend, contexto limitado por proprietário e pet vetorial nos dois temas. Contrato e limites em [especificação da assistente](../openspec/specs/academic-assistant/spec.md). Não há chave local configurada neste momento; integração externa real ainda não homologada.
 - Guia de 27/10: [openspec.md](../openspec.md) foi reformulado como manual operacional inspirado no exemplo fornecido pelo usuário, adaptado à stack React/FastAPI. Reúne regras de domínio/arquitetura, tema, UX/motion, segurança, escopo, Git, fluxo orientado por especificação, modelos e definição de pronto. Acrescenta seis propostas de produto explicitamente futuras, sem alterar funcionalidades, dependências ou instalar CLI/hooks.
 - A auditoria documental de 24/10 foi preservada em [HISTORY.md](HISTORY.md), mantendo os 57 commits até 0776ce2 e o catálogo dos 307 arquivos daquele corte. A reorganização de 27/10 corrige os links relativos e distingue o guia operacional do levantamento histórico; README e AGENTS apontam para seus papéis atuais.
 - Entrada de 19/10: o tema escolhido no login/cadastro prevalece sobre o tema anteriormente salvo da conta e continua no vídeo e no Dashboard. Após ler as preferências reais, somente o campo theme é sincronizado com essa escolha; capacidade e Pomodoro são preservados. Há versões clara/escura de cerca de 10 segundos. A apresentação preenche o viewport, sem textos ou controles sobrepostos, e segue automaticamente para o Dashboard. Inicia sem som; Escape permanece disponível. Recarregar uma sessão existente não repete o vídeo.
